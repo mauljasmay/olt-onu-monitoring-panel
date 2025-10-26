@@ -6,16 +6,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Activity, AlertTriangle, CheckCircle, Server, Wifi, WifiOff, Users, Cable, Settings, RefreshCw, Download, FileText, BarChart3, LogOut, User } from 'lucide-react'
+import { Activity, AlertTriangle, Server, Wifi, Settings, RefreshCw, Download, LogOut, User } from 'lucide-react'
 import { OLTTable } from '@/components/olt-table'
 import { ONUTable } from '@/components/onu-table'
 import { useSocket } from '@/hooks/useSocket'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { toast } from '@/hooks/use-toast'
+import { AnalyticsChart } from '@/components/dashboard/analytics-chart'
+import { RealTimeMonitoring } from '@/components/dashboard/real-time-monitoring'
+import { NetworkTopology } from '@/components/dashboard/network-topology'
+import { PerformanceMetrics } from '@/components/dashboard/performance-metrics'
 
 interface DashboardStats {
   totalOLT: number
@@ -66,7 +69,6 @@ export default function Dashboard() {
       }
     }
 
-    // Only fetch stats if authenticated
     if (status === 'authenticated') {
       fetchStats()
     }
@@ -78,14 +80,12 @@ export default function Dashboard() {
       switch (lastMessage.type) {
         case 'device-status-changed':
         case 'device-metrics-updated':
-          // Refresh stats when device changes
           fetch('/api/dashboard/stats')
             .then(res => res.json())
             .then(data => setStats(data))
             .catch(console.error)
           break
         case 'alert-created':
-          // Update alert counts
           if (lastMessage.data.type === 'critical') {
             setStats(prev => ({ ...prev, criticalAlerts: prev.criticalAlerts + 1 }))
           } else if (lastMessage.data.type === 'warning') {
@@ -96,7 +96,6 @@ export default function Dashboard() {
     }
   }, [lastMessage, status])
 
-  // Handle authentication
   if (status === 'loading') {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -106,7 +105,7 @@ export default function Dashboard() {
   }
 
   if (status === 'unauthenticated') {
-    return null // Will be redirected by middleware
+    return null
   }
 
   const handleLogout = async () => {
@@ -125,20 +124,6 @@ export default function Dashboard() {
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'online':
-        return 'bg-green-500'
-      case 'offline':
-        return 'bg-red-500'
-      case 'warning':
-        return 'bg-yellow-500'
-      default:
-        return 'bg-gray-500'
-    }
-  }
-
-  // Quick Actions Functions
   const handleBulkConfiguration = async () => {
     setActionLoading('bulk-config')
     try {
@@ -147,7 +132,6 @@ export default function Dashboard() {
         description: "Memulai konfigurasi massal untuk semua OLT...",
       })
       
-      // Simulate bulk configuration
       await new Promise(resolve => setTimeout(resolve, 2000))
       
       toast({
@@ -173,10 +157,8 @@ export default function Dashboard() {
         description: "Menyinkronkan semua perangkat OLT...",
       })
       
-      // Simulate device sync
       await new Promise(resolve => setTimeout(resolve, 3000))
       
-      // Refresh stats after sync
       const response = await fetch('/api/dashboard/stats')
       if (response.ok) {
         const data = await response.json()
@@ -206,10 +188,8 @@ export default function Dashboard() {
         description: "Mengekspor konfigurasi semua OLT...",
       })
       
-      // Simulate export
       await new Promise(resolve => setTimeout(resolve, 1500))
       
-      // Create a sample configuration file
       const config = {
         timestamp: new Date().toISOString(),
         olts: [
@@ -229,7 +209,6 @@ export default function Dashboard() {
         ]
       }
       
-      // Download the configuration file
       const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -255,137 +234,15 @@ export default function Dashboard() {
     }
   }
 
-  const handleApplyTemplate = async (templateModel: string) => {
-    // Special handling for TMO template
-    if (templateModel === 'TMO-4EP-4SX-4G-OLT') {
-      setShowTmoDialog(true)
-      return
-    }
-
-    setActionLoading(`template-${templateModel}`)
-    try {
-      toast({
-        title: "Apply Template",
-        description: `Menerapkan template ${templateModel}...`,
-      })
-      
-      // Call template API
-      const response = await fetch('/api/olts/templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ model: templateModel })
-      })
-      
-      if (response.ok) {
-        const template = await response.json()
-        
-        toast({
-          title: "Template Diterapkan",
-          description: `Template ${templateModel} berhasil diterapkan ke semua OLT`,
-        })
-      } else {
-        throw new Error('Failed to apply template')
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: `Gagal menerapkan template ${templateModel}`,
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleApplyTmoTemplate = async () => {
-    if (!tmoIpAddress.trim()) {
-      toast({
-        title: "Error",
-        description: "IP address harus diisi untuk template TMO",
-        variant: "destructive"
-      })
-      return
-    }
-
-    // Validate IP address format
-    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
-    if (!ipRegex.test(tmoIpAddress.trim())) {
-      toast({
-        title: "Error", 
-        description: "Format IP address tidak valid",
-        variant: "destructive"
-      })
-      return
-    }
-
-    setActionLoading('template-TMO-4EP-4SX-4G-OLT')
-    try {
-      toast({
-        title: "Apply TMO Template",
-        description: `Menerapkan template TMO dengan IP ${tmoIpAddress}...`,
-      })
-      
-      // Call TMO template API with custom IP
-      const response = await fetch('/api/olts/templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          model: 'TMO-4EP-4SX-4G-OLT',
-          customIp: tmoIpAddress.trim(),
-          snmpConfig: {
-            community: 'public',
-            port: 161,
-            version: '2c'
-          }
-        })
-      })
-      
-      if (response.ok) {
-        const template = await response.json()
-        
-        toast({
-          title: "TMO Template Diterapkan",
-          description: `Template TMO berhasil diterapkan dengan IP ${tmoIpAddress}`,
-        })
-        
-        // Reset form
-        setTmoIpAddress('')
-        setShowTmoDialog(false)
-      } else {
-        throw new Error('Failed to apply TMO template')
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: `Gagal menerapkan template TMO dengan IP ${tmoIpAddress}`,
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">MLJNET RADIUS - OLT & ONU Monitoring Panel</h1>
+            <h1 className="text-3xl font-bold tracking-tight">MLJNET RADIUS - Network Monitoring</h1>
             <p className="text-muted-foreground">
-              Monitor jaringan fiber optic secara real-time
+              Real-time monitoring and management dashboard
             </p>
           </div>
           <div className="flex items-center space-x-2">
@@ -394,7 +251,6 @@ export default function Dashboard() {
               <span>{isConnected ? 'Live' : 'Offline'}</span>
             </Badge>
             
-            {/* User Info */}
             <div className="flex items-center space-x-2">
               <Badge variant="secondary" className="flex items-center space-x-1">
                 <User className="h-3 w-3" />
@@ -470,243 +326,99 @@ export default function Dashboard() {
 
         {/* Main Content */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList>
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="olts">OLT Devices</TabsTrigger>
-            <TabsTrigger value="onus">ONU Devices</TabsTrigger>
-            <TabsTrigger value="actions">Quick Actions</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="monitoring">Real-time</TabsTrigger>
+            <TabsTrigger value="topology">Topology</TabsTrigger>
+            <TabsTrigger value="performance">Performance</TabsTrigger>
+            <TabsTrigger value="devices">Devices</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Activities</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">OLT-01 Connected</p>
-                        <p className="text-xs text-muted-foreground">2 minutes ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">High CPU Usage on OLT-02</p>
-                        <p className="text-xs text-muted-foreground">15 minutes ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">Configuration Updated</p>
-                        <p className="text-xs text-muted-foreground">1 hour ago</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>System Status</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Database</span>
-                      <Badge variant="outline" className="text-green-600">Connected</Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">SNMP Service</span>
-                      <Badge variant="outline" className="text-green-600">Running</Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">WebSocket</span>
-                      <Badge variant={isConnected ? "outline" : "destructive"} className={isConnected ? "text-green-600" : ""}>
-                        {isConnected ? 'Connected' : 'Disconnected'}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Last Backup</span>
-                      <span className="text-sm text-muted-foreground">2 hours ago</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <AnalyticsChart />
+            <RealTimeMonitoring />
           </TabsContent>
 
-          <TabsContent value="olts">
-            <OLTTable />
+          <TabsContent value="analytics" className="space-y-4">
+            <AnalyticsChart 
+              title="Detailed Network Analytics"
+              description="Comprehensive analysis of network performance and usage patterns"
+            />
           </TabsContent>
 
-          <TabsContent value="onus">
-            <ONUTable />
+          <TabsContent value="monitoring" className="space-y-4">
+            <RealTimeMonitoring />
           </TabsContent>
 
-          <TabsContent value="actions" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Settings className="h-5 w-5" />
-                    <span>Bulk Configuration</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Terapkan konfigurasi ke semua OLT sekaligus
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button 
-                    className="w-full" 
-                    onClick={handleBulkConfiguration}
-                    disabled={actionLoading === 'bulk-config'}
-                  >
-                    {actionLoading === 'bulk-config' ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      'Start Bulk Config'
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
+          <TabsContent value="topology" className="space-y-4">
+            <NetworkTopology />
+          </TabsContent>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <RefreshCw className="h-5 w-5" />
-                    <span>Sync All Devices</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Sinkronkan data semua perangkat OLT dan ONU
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button 
-                    className="w-full" 
-                    variant="outline"
-                    onClick={handleSyncAllDevices}
-                    disabled={actionLoading === 'sync-devices'}
-                  >
-                    {actionLoading === 'sync-devices' ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Syncing...
-                      </>
-                    ) : (
-                      'Sync Devices'
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
+          <TabsContent value="performance" className="space-y-4">
+            <PerformanceMetrics />
+          </TabsContent>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Download className="h-5 w-5" />
-                    <span>Export Configuration</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Download konfigurasi semua OLT
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button 
-                    className="w-full" 
-                    variant="outline"
-                    onClick={handleExportConfig}
-                    disabled={actionLoading === 'export-config'}
-                  >
-                    {actionLoading === 'export-config' ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Exporting...
-                      </>
-                    ) : (
-                      'Export Config'
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <FileText className="h-5 w-5" />
-                    <span>Apply Template</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Terapkan template konfigurasi
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button className="w-full" variant="outline">
-                        Choose Template
+          <TabsContent value="devices" className="space-y-4">
+            <Tabs defaultValue="olts" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="olts">OLT Devices</TabsTrigger>
+                <TabsTrigger value="onus">ONU Devices</TabsTrigger>
+                <TabsTrigger value="actions">Quick Actions</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="olts">
+                <OLTTable />
+              </TabsContent>
+              
+              <TabsContent value="onus">
+                <ONUTable />
+              </TabsContent>
+              
+              <TabsContent value="actions" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Quick Actions</CardTitle>
+                    <CardDescription>
+                      Common tasks and device management operations
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      <Button 
+                        variant="outline" 
+                        className="h-20 flex-col"
+                        onClick={handleBulkConfiguration}
+                        disabled={actionLoading === 'bulk-config'}
+                      >
+                        <Settings className="h-6 w-6 mb-2" />
+                        {actionLoading === 'bulk-config' ? 'Configuring...' : 'Bulk Configuration'}
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuLabel>Available Templates</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleApplyTemplate('Huawei-MA5800')}>
-                        Huawei MA5800
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleApplyTemplate('ZTE-C320')}>
-                        ZTE C320
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleApplyTemplate('Nokia-7360')}>
-                        Nokia 7360 FX
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleApplyTemplate('TMO-4EP-4SX-4G-OLT')}>
-                        TMO 4EP+4SX+4G OLT
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <BarChart3 className="h-5 w-5" />
-                    <span>Performance Metrics</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Lihat performa semua perangkat
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full" variant="outline">
-                    View Metrics
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <AlertTriangle className="h-5 w-5" />
-                    <span>Alert Rules</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Konfigurasi aturan alert
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full" variant="outline">
-                    Configure Alerts
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
+                      
+                      <Button 
+                        variant="outline" 
+                        className="h-20 flex-col"
+                        onClick={handleSyncAllDevices}
+                        disabled={actionLoading === 'sync-devices'}
+                      >
+                        <RefreshCw className={`h-6 w-6 mb-2 ${actionLoading === 'sync-devices' ? 'animate-spin' : ''}`} />
+                        {actionLoading === 'sync-devices' ? 'Syncing...' : 'Sync All Devices'}
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        className="h-20 flex-col"
+                        onClick={handleExportConfig}
+                        disabled={actionLoading === 'export-config'}
+                      >
+                        <Download className="h-6 w-6 mb-2" />
+                        {actionLoading === 'export-config' ? 'Exporting...' : 'Export Config'}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </Tabs>
 
@@ -714,41 +426,31 @@ export default function Dashboard() {
         <Dialog open={showTmoDialog} onOpenChange={setShowTmoDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Konfigurasi Template TMO</DialogTitle>
+              <DialogTitle>TMO Template Configuration</DialogTitle>
               <DialogDescription>
-                Masukkan IP address untuk template TMO-4EP-4SX-4G-OLT
+                Enter IP address for TMO 4EP+4SX+4G OLT template
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="tmo-ip" className="text-right">
-                  IP Address
-                </Label>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="tmo-ip">IP Address</Label>
                 <Input
                   id="tmo-ip"
+                  placeholder="192.168.1.100"
                   value={tmoIpAddress}
                   onChange={(e) => setTmoIpAddress(e.target.value)}
-                  placeholder="192.168.1.100"
-                  className="col-span-3"
                 />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowTmoDialog(false)}>
-                Batal
+                Cancel
               </Button>
-              <Button 
-                onClick={handleApplyTmoTemplate}
-                disabled={actionLoading === 'template-TMO-4EP-4SX-4G-OLT'}
-              >
-                {actionLoading === 'template-TMO-4EP-4SX-4G-OLT' ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Applying...
-                  </>
-                ) : (
-                  'Apply Template'
-                )}
+              <Button onClick={() => {
+                // Handle TMO template application
+                setShowTmoDialog(false)
+              }}>
+                Apply Template
               </Button>
             </DialogFooter>
           </DialogContent>
