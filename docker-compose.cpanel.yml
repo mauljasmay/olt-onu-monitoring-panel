@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  # GenieACS Core Services
+  genieacs-cwmp:
+    image: genieacs/genieacs:latest
+    container_name: genieacs-cwmp
+    ports:
+      - "7547:7547"
+    environment:
+      - GENIEACS_CWMP_ACCESS_LOG_FILE=/var/log/genieacs/genieacs-cwmp-access.log
+      - GENIEACS_CWMP_DEBUG_ACCESS_LOG_FILE=/var/log/genieacs/genieacs-cwmp-debug-access.log
+      - GENIEACS_CWMP_ERROR_LOG_FILE=/var/log/genieacs/genieacs-cwmp-error.log
+      - GENIEACS_CWMP_EXT_TIMEOUT=30
+      - GENIEACS_CWMP_INTERFACE=0.0.0.0
+      - GENIEACS_CWMP_PORT=7547
+      - GENIEACS_CWMP_REQUEST_TIMEOUT=30
+      - GENIEACS_CWMP_WORKER_PROCESSES=4
+    volumes:
+      - ./logs:/var/log/genieacs
+      - ./config:/etc/genieacs
+    restart: unless-stopped
+    networks:
+      - genieacs-network
+
+  genieacs-nbi:
+    image: genieacs/genieacs:latest
+    container_name: genieacs-nbi
+    ports:
+      - "7557:7557"
+    environment:
+      - GENIEACS_NBI_ACCESS_LOG_FILE=/var/log/genieacs/genieacs-nbi-access.log
+      - GENIEACS_NBI_DEBUG_ACCESS_LOG_FILE=/var/log/genieacs/genieacs-nbi-debug-access.log
+      - GENIEACS_NBI_ERROR_LOG_FILE=/var/log/genieacs/genieacs-nbi-error.log
+      - GENIEACS_NBI_INTERFACE=0.0.0.0
+      - GENIEACS_NBI_PORT=7557
+      - GENIEACS_NBI_REQUEST_TIMEOUT=30
+      - GENIEACS_NBI_WORKER_PROCESSES=4
+    volumes:
+      - ./logs:/var/log/genieacs
+      - ./config:/etc/genieacs
+    restart: unless-stopped
+    networks:
+      - genieacs-network
+
+  genieacs-fs:
+    image: genieacs/genieacs:latest
+    container_name: genieacs-fs
+    ports:
+      - "7567:7567"
+    environment:
+      - GENIEACS_FS_ACCESS_LOG_FILE=/var/log/genieacs/genieacs-fs-access.log
+      - GENIEACS_FS_DEBUG_ACCESS_LOG_FILE=/var/log/genieacs/genieacs-fs-debug-access.log
+      - GENIEACS_FS_ERROR_LOG_FILE=/var/log/genieacs/genieacs-fs-error.log
+      - GENIEACS_FS_INTERFACE=0.0.0.0
+      - GENIEACS_FS_PORT=7567
+      - GENIEACS_FS_REQUEST_TIMEOUT=30
+      - GENIEACS_FS_WORKER_PROCESSES=4
+    volumes:
+      - ./files:/opt/genieacs/files
+      - ./logs:/var/log/genieacs
+      - ./config:/etc/genieacs
+    restart: unless-stopped
+    networks:
+      - genieacs-network
+
+  genieacs-ui:
+    image: genieacs/genieacs-ui:latest
+    container_name: genieacs-ui
+    ports:
+      - "3000:3000"
+    environment:
+      - GENIEACS_UI_API_URL=http://localhost:7557
+      - GENIEACS_UI_FS_URL=http://localhost:7567
+    depends_on:
+      - genieacs-nbi
+      - genieacs-fs
+    restart: unless-stopped
+    networks:
+      - genieacs-network
+
+  # MongoDB for GenieACS
+  mongodb:
+    image: mongo:6.0
+    container_name: genieacs-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=your_mongo_password
+      - MONGO_INITDB_DATABASE=genieacs
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    networks:
+      - genieacs-network
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: genieacs-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - genieacs-network
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: genieacs-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - genieacs-ui
+      - genieacs-cwmp
+      - genieacs-nbi
+      - genieacs-fs
+    restart: unless-stopped
+    networks:
+      - genieacs-network
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  genieacs-network:
+    driver: bridge
