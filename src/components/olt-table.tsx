@@ -701,8 +701,14 @@ export function OLTTable() {
                   <p><strong>IP Address:</strong> {oltToDelete.ip}</p>
                   <p><strong>Model:</strong> {oltToDelete.model}</p>
                   <p><strong>Status:</strong> {oltToDelete.status}</p>
-                  <p><strong>Jumlah ONU:</strong> {oltToDelete.onuCount}</p>
+                  <p><strong>Jumlah ONU:</strong> {oltToDelete.onuCount} perangkat</p>
+                  <p><strong>ONU Aktif:</strong> {oltToDelete.activeONU} perangkat</p>
                 </div>
+                {(oltToDelete.onuCount > 0 || oltToDelete.activeONU > 0) && (
+                  <div className="mt-3 p-2 bg-red-100 rounded text-red-800 text-xs">
+                    <strong>⚠️ Peringatan:</strong> {oltToDelete.onuCount} ONU akan kehilangan konfigurasi dan data monitoring!
+                  </div>
+                )}
               </div>
             )}
 
