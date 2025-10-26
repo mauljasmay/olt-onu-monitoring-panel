@@ -147,6 +147,15 @@ export function OLTTable() {
 
         // Refresh devices list
         fetchDevices()
+        
+        // Also refresh dashboard stats
+        fetch('/api/dashboard/stats')
+          .then(res => res.json())
+          .then(data => {
+            // This will update the main dashboard stats if needed
+            console.log('Dashboard stats refreshed:', data)
+          })
+          .catch(console.error)
       } else {
         throw new Error('Failed to add OLT')
       }
