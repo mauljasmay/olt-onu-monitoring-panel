@@ -30,13 +30,37 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Get GenieACS stats
+    const genieacsConfigs = await db.genieACSConfig.count({
+      where: { isActive: true }
+    })
+
+    const syncedOLTs = await db.oLT.count({
+      where: { 
+        genieacsSynced: true,
+        genieacsDeviceId: { not: null }
+      }
+    })
+
+    const syncedONUs = await db.oNU.count({
+      where: { 
+        genieacsSynced: true,
+        genieacsDeviceId: { not: null }
+      }
+    })
+
     const stats = {
       totalOLT,
       onlineOLT,
       totalONU,
       onlineONU,
       criticalAlerts,
-      warningAlerts
+      warningAlerts,
+      genieacs: {
+        activeConfigs: genieacsConfigs,
+        syncedOLTs,
+        syncedONUs
+      }
     }
 
     return NextResponse.json(stats)

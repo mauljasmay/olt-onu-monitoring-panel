@@ -19,6 +19,7 @@ import { AnalyticsChart } from '@/components/dashboard/analytics-chart'
 import { RealTimeMonitoring } from '@/components/dashboard/real-time-monitoring'
 import { NetworkTopology } from '@/components/dashboard/network-topology'
 import { PerformanceMetrics } from '@/components/dashboard/performance-metrics'
+import GenieACSConfig from '@/components/GenieACSConfig'
 
 interface DashboardStats {
   totalOLT: number
@@ -326,13 +327,14 @@ export default function Dashboard() {
 
         {/* Main Content */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="monitoring">Real-time</TabsTrigger>
             <TabsTrigger value="topology">Topology</TabsTrigger>
             <TabsTrigger value="performance">Performance</TabsTrigger>
             <TabsTrigger value="devices">Devices</TabsTrigger>
+            <TabsTrigger value="genieacs">GenieACS</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -419,6 +421,10 @@ export default function Dashboard() {
                 </Card>
               </TabsContent>
             </Tabs>
+          </TabsContent>
+
+          <TabsContent value="genieacs" className="space-y-4">
+            <GenieACSConfig />
           </TabsContent>
         </Tabs>
 

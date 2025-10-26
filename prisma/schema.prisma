@@ -100,6 +100,11 @@ model OLT {
   monitoringInterval Int @default(300) // in seconds
   alertThresholds String? // JSON string for alert thresholds
   
+  // GenieACS Integration
+  genieacsDeviceId String?  // GenieACS device ID
+  genieacsSynced    Boolean @default(false)
+  genieacsLastSync  DateTime?
+  
   onus          ONU[]
   alerts        Alert[]
   
@@ -123,6 +128,11 @@ model ONU {
   ipAddress     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  
+  // GenieACS Integration
+  genieacsDeviceId String?  // GenieACS device ID
+  genieacsSynced    Boolean @default(false)
+  genieacsLastSync  DateTime?
   
   olt           OLT      @relation(fields: [oltId], references: [id], onDelete: Cascade)
   alerts        Alert[]
@@ -157,4 +167,124 @@ model MonitoringLog {
   timestamp   DateTime @default(now())
   
   @@map("monitoring_logs")
+}
+
+model GenieACSConfig {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  baseUrl     String
+  username    String?
+  password    String?  // Stored encrypted
+  timeout     Int      @default(30000)
+  isActive    Boolean  @default(true)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Sync settings
+  autoSync    Boolean  @default(true)
+  syncInterval Int     @default(300) // in seconds
+  lastSync    DateTime?
+  
+  @@map("genieacs_configs")
+}
+
+model GenieACSTask {
+  id          String   @id @default(cuid())
+  taskId      String   // GenieACS task ID
+  deviceType  String   // olt, onu
+  deviceId    String
+  taskType    String   // sync, config, reboot, etc.
+  status      String   @default("pending") // pending, completed, failed
+  script      String?
+  result      String?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+  
+  @@map("genieacs_tasks")
+}
+
+model GenieACSParameterThreshold {
+  id            String   @id @default(cuid())
+  parameterPath String
+  deviceType    String   @default("all") // olt, onu, all
+  condition     String   // greater_than, less_than, equals, not_equals, contains
+  thresholdValue String  // Can be number or string
+  severity      String   @default("warning") // info, warning, critical
+  enabled       Boolean  @default(true)
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("genieacs_parameter_thresholds")
+}
+
+model GenieACSDeviceHealth {
+  id                String   @id @default(cuid())
+  deviceId          String   @unique
+  overallScore      Int      // 0-100
+  connectivityScore Int      // 0-100
+  performanceScore  Int      // 0-100
+  stabilityScore    Int      // 0-100
+  lastCalculated    DateTime @default(now())
+  factors           String   // JSON string for detailed factors
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("genieacs_device_health")
+}
+
+model GenieACSFirmwareInfo {
+  id               String   @id @default(cuid())
+  deviceId         String   @unique
+  currentVersion   String
+  availableVersion String?
+  updateStatus     String   @default("up-to-date") // up-to-date, available, updating, failed
+  lastUpdateCheck  DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  @@map("genieacs_firmware_info")
+}
+
+model GenieACSFirmwareHistory {
+  id        String   @id @default(cuid())
+  deviceId  String
+  version   String
+  timestamp DateTime @default(now())
+  status    String   // success, failed
+  duration  Int?     // in seconds
+  
+  @@map("genieacs_firmware_history")
+}
+
+model GenieACSDeviceGroup {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  criteria    String   // JSON string for grouping criteria
+  deviceIds   String   // JSON array of device IDs
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("genieacs_device_groups")
+}
+
+model GenieACSScheduledTask {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  taskType    String   // reboot, firmware_update, parameter_set, etc.
+  target      String   // device_id, group_id, or "all"
+  schedule    String   // Cron expression
+  script      String?
+  enabled     Boolean  @default(true)
+  lastRun     DateTime?
+  nextRun     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("genieacs_scheduled_tasks")
 }
