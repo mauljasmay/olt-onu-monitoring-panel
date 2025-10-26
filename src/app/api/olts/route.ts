@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, ipAddress, model } = body
+    const { name, ipAddress, model, snmpCommunity, snmpPort, location } = body
 
     if (!name || !ipAddress || !model) {
       return NextResponse.json(
@@ -101,11 +101,39 @@ export async function POST(request: NextRequest) {
         name,
         ipAddress,
         model,
-        status: 'offline'
+        location: location || null,
+        snmpCommunity: snmpCommunity || 'public',
+        snmpPort: snmpPort || 161,
+        status: 'offline',
+        cpuUsage: 0,
+        memoryUsage: 0,
+        temperature: 0,
+        uptime: 0,
+        onuCount: 0,
+        activeONU: 0,
+        // Default alert thresholds as JSON
+        alertThresholds: JSON.stringify({
+          cpuWarning: 70,
+          cpuCritical: 90,
+          memoryWarning: 70,
+          memoryCritical: 90,
+          temperatureWarning: 60,
+          temperatureCritical: 75
+        }),
+        // Default VLAN configuration as JSON
+        vlanConfig: JSON.stringify({
+          management: 1,
+          internet: 100,
+          voip: 200,
+          iptv: 300
+        })
       }
     })
 
-    return NextResponse.json(olt, { status: 201 })
+    return NextResponse.json({
+      ...olt,
+      message: `OLT ${name} berhasil ditambahkan dengan konfigurasi SNMP ${ipAddress}:${snmpPort || 161}`
+    }, { status: 201 })
   } catch (error) {
     console.error('Error creating OLT:', error)
     return NextResponse.json(

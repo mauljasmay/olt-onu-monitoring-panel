@@ -7,8 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Search, Server, Wifi, WifiOff, AlertTriangle, Settings, Eye } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Search, Server, Wifi, WifiOff, AlertTriangle, Settings, Eye, Plus } from 'lucide-react'
 import { OLTSettings } from './olt-settings'
+import { toast } from '@/hooks/use-toast'
 
 interface OLTDevice {
   id: string
@@ -32,6 +35,18 @@ export function OLTTable() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedOLT, setSelectedOLT] = useState<{ id: string; name: string } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [addLoading, setAddLoading] = useState(false)
+  
+  // Form state for new OLT
+  const [newOlt, setNewOlt] = useState({
+    name: '',
+    ipAddress: '',
+    model: '',
+    snmpCommunity: 'public',
+    snmpPort: 161,
+    location: ''
+  })
 
   const handleOpenSettings = (device: OLTDevice) => {
     setSelectedOLT({ id: device.id, name: device.name })
@@ -46,6 +61,117 @@ export function OLTTable() {
   const handleSaveSettings = (settings: any) => {
     // Refresh the devices list to reflect any changes
     fetchDevices()
+  }
+
+  const handleAddOLT = async () => {
+    // Validation
+    if (!newOlt.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Nama OLT harus diisi",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!newOlt.ipAddress.trim()) {
+      toast({
+        title: "Error", 
+        description: "IP address harus diisi",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Validate IP address format
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+    if (!ipRegex.test(newOlt.ipAddress.trim())) {
+      toast({
+        title: "Error",
+        description: "Format IP address tidak valid",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!newOlt.model) {
+      toast({
+        title: "Error",
+        description: "Model OLT harus dipilih",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setAddLoading(true)
+    try {
+      toast({
+        title: "Menambah OLT",
+        description: `Menambahkan OLT ${newOlt.name}...`,
+      })
+
+      // Call API to add OLT
+      const response = await fetch('/api/olts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: newOlt.name.trim(),
+          ipAddress: newOlt.ipAddress.trim(),
+          model: newOlt.model,
+          snmpCommunity: newOlt.snmpCommunity,
+          snmpPort: newOlt.snmpPort,
+          location: newOlt.location.trim()
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        
+        toast({
+          title: "OLT Berhasil Ditambahkan",
+          description: `OLT ${newOlt.name} berhasil ditambahkan dengan SNMP ${newOlt.ipAddress}:${newOlt.snmpPort}`,
+        })
+
+        // Reset form
+        setNewOlt({
+          name: '',
+          ipAddress: '',
+          model: '',
+          snmpCommunity: 'public',
+          snmpPort: 161,
+          location: ''
+        })
+        setAddDialogOpen(false)
+
+        // Refresh devices list
+        fetchDevices()
+      } else {
+        throw new Error('Failed to add OLT')
+      }
+    } catch (error) {
+      console.error('Failed to add OLT:', error)
+      toast({
+        title: "Error",
+        description: `Gagal menambahkan OLT ${newOlt.name}`,
+        variant: "destructive"
+      })
+    } finally {
+      setAddLoading(false)
+    }
+  }
+
+  const resetAddForm = () => {
+    setNewOlt({
+      name: '',
+      ipAddress: '',
+      model: '',
+      snmpCommunity: 'public',
+      snmpPort: 161,
+      location: ''
+    })
+    setAddDialogOpen(false)
   }
 
   const fetchDevices = async () => {
@@ -231,10 +357,130 @@ export function OLTTable() {
             </CardDescription>
           </div>
           <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm">
-              <Settings className="h-4 w-4 mr-2" />
-              Configure
-            </Button>
+            <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add OLT
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center space-x-2">
+                    <Plus className="h-5 w-5" />
+                    <span>Tambah OLT Baru</span>
+                  </DialogTitle>
+                  <DialogDescription>
+                    Tambahkan perangkat OLT baru dengan konfigurasi SNMP
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="olt-name" className="text-right">
+                      Nama OLT
+                    </Label>
+                    <Input
+                      id="olt-name"
+                      placeholder="OLT-07"
+                      value={newOlt.name}
+                      onChange={(e) => setNewOlt(prev => ({ ...prev, name: e.target.value }))}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="olt-ip" className="text-right">
+                      IP Address
+                    </Label>
+                    <Input
+                      id="olt-ip"
+                      placeholder="192.168.1.100"
+                      value={newOlt.ipAddress}
+                      onChange={(e) => setNewOlt(prev => ({ ...prev, ipAddress: e.target.value }))}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="olt-model" className="text-right">
+                      Model
+                    </Label>
+                    <Select value={newOlt.model} onValueChange={(value) => setNewOlt(prev => ({ ...prev, model: value }))}>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Pilih model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ZTE-C320">ZTE C320</SelectItem>
+                        <SelectItem value="ZTE-C300">ZTE C300</SelectItem>
+                        <SelectItem value="Huawei-MA5600">Huawei MA5600</SelectItem>
+                        <SelectItem value="Huawei-MA5800">Huawei MA5800</SelectItem>
+                        <SelectItem value="Nokia-7360">Nokia 7360</SelectItem>
+                        <SelectItem value="Fiberhome-AN5500">Fiberhome AN5500</SelectItem>
+                        <SelectItem value="TMO-4EP-4SX-4G-OLT">TMO 4EP-4SX-4G-OLT</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="snmp-community" className="text-right">
+                      SNMP Community
+                    </Label>
+                    <Input
+                      id="snmp-community"
+                      placeholder="public"
+                      value={newOlt.snmpCommunity}
+                      onChange={(e) => setNewOlt(prev => ({ ...prev, snmpCommunity: e.target.value }))}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="snmp-port" className="text-right">
+                      SNMP Port
+                    </Label>
+                    <Input
+                      id="snmp-port"
+                      type="number"
+                      placeholder="161"
+                      value={newOlt.snmpPort}
+                      onChange={(e) => setNewOlt(prev => ({ ...prev, snmpPort: parseInt(e.target.value) || 161 }))}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="olt-location" className="text-right">
+                      Lokasi
+                    </Label>
+                    <Input
+                      id="olt-location"
+                      placeholder="Data Center Jakarta"
+                      value={newOlt.location}
+                      onChange={(e) => setNewOlt(prev => ({ ...prev, location: e.target.value }))}
+                      className="col-span-3"
+                    />
+                  </div>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    <strong>Informasi:</strong> OLT akan ditambahkan dengan konfigurasi SNMP untuk monitoring otomatis. 
+                    Pastikan IP address dan SNMP community sudah benar.
+                  </p>
+                </div>
+                <DialogFooter>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={resetAddForm}
+                    disabled={addLoading}
+                  >
+                    Batal
+                  </Button>
+                  <Button 
+                    type="button" 
+                    onClick={handleAddOLT}
+                    disabled={addLoading}
+                  >
+                    {addLoading ? 'Menambahkan...' : 'Tambah OLT'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </CardHeader>
