@@ -1,0 +1,101 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model OLT {
+  id            String   @id @default(cuid())
+  name          String
+  ipAddress     String   @unique
+  model         String
+  status        String   @default("offline") // online, offline, warning
+  uptime        Int      @default(0) // in seconds
+  cpuUsage      Int      @default(0)
+  memoryUsage   Int      @default(0)
+  temperature   Int      @default(0)
+  onuCount      Int      @default(0)
+  activeONU     Int      @default(0)
+  lastSeen      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Configuration settings
+  location      String?
+  description   String?
+  vlanConfig    String?  // JSON string for VLAN configuration
+  snmpCommunity String?  @default("public")
+  snmpPort      Int      @default(161)
+  telnetPort    Int      @default(23)
+  sshPort       Int      @default(22)
+  webPort       Int      @default(80)
+  monitoringInterval Int @default(300) // in seconds
+  alertThresholds String? // JSON string for alert thresholds
+  
+  onus          ONU[]
+  alerts        Alert[]
+  
+  @@map("olts")
+}
+
+model ONU {
+  id            String   @id @default(cuid())
+  name          String
+  serialNumber  String   @unique
+  oltId         String
+  port          Int
+  status        String   @default("offline") // online, offline, warning
+  signalStrength Int     @default(0) // in dBm
+  rxPower       Float    @default(0) // in dBm
+  txPower       Float    @default(0) // in dBm
+  distance      Int      @default(0) // in meters
+  uptime        Int      @default(0) // in seconds
+  lastSeen      DateTime?
+  customerName  String?
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  olt           OLT      @relation(fields: [oltId], references: [id], onDelete: Cascade)
+  alerts        Alert[]
+  
+  @@map("onus")
+}
+
+model Alert {
+  id          String   @id @default(cuid())
+  type        String   // critical, warning, info
+  title       String
+  description String?
+  deviceId    String
+  deviceType  String   // olt, onu
+  status      String   @default("active") // active, resolved, acknowledged
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  olt         OLT?     @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  onu         ONU?     @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  
+  @@map("alerts")
+}
+
+model MonitoringLog {
+  id          String   @id @default(cuid())
+  deviceId    String
+  deviceType  String   // olt, onu
+  metric      String   // cpu, memory, temperature, signal, etc.
+  value       Float
+  unit        String   // %, °C, dBm, etc.
+  timestamp   DateTime @default(now())
+  
+  @@map("monitoring_logs")
+}

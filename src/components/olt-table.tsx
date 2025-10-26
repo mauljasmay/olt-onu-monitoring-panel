@@ -1,0 +1,358 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Search, Server, Wifi, WifiOff, AlertTriangle, Settings, Eye } from 'lucide-react'
+import { OLTSettings } from './olt-settings'
+
+interface OLTDevice {
+  id: string
+  name: string
+  ip: string
+  model: string
+  status: 'online' | 'offline' | 'warning'
+  uptime: string
+  cpuUsage: number
+  memoryUsage: number
+  temperature: number
+  onuCount: number
+  activeONU: number
+  lastSeen: string
+}
+
+export function OLTTable() {
+  const [devices, setDevices] = useState<OLTDevice[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [selectedOLT, setSelectedOLT] = useState<{ id: string; name: string } | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  const handleOpenSettings = (device: OLTDevice) => {
+    setSelectedOLT({ id: device.id, name: device.name })
+    setSettingsOpen(true)
+  }
+
+  const handleCloseSettings = () => {
+    setSettingsOpen(false)
+    setSelectedOLT(null)
+  }
+
+  const handleSaveSettings = (settings: any) => {
+    // Refresh the devices list to reflect any changes
+    fetchDevices()
+  }
+
+  const fetchDevices = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (statusFilter !== 'all') params.append('status', statusFilter)
+      if (searchTerm) params.append('search', searchTerm)
+      
+      const response = await fetch(`/api/olts?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setDevices(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch OLT devices:', error)
+      // Fallback to mock data
+      const mockDevices: OLTDevice[] = [
+        {
+          id: '1',
+          name: 'OLT-01',
+          ip: '192.168.1.10',
+          model: 'Huawei MA5800',
+          status: 'online',
+          uptime: '15 hari 3 jam',
+          cpuUsage: 45,
+          memoryUsage: 62,
+          temperature: 42,
+          onuCount: 32,
+          activeONU: 30,
+          lastSeen: '2 menit yang lalu'
+        },
+        {
+          id: '2',
+          name: 'OLT-02',
+          ip: '192.168.1.11',
+          model: 'ZTE C320',
+          status: 'online',
+          uptime: '8 hari 12 jam',
+          cpuUsage: 38,
+          memoryUsage: 55,
+          temperature: 38,
+          onuCount: 28,
+          activeONU: 27,
+          lastSeen: '1 menit yang lalu'
+        },
+        {
+          id: '3',
+          name: 'OLT-03',
+          ip: '192.168.1.12',
+          model: 'Huawei MA5800',
+          status: 'offline',
+          uptime: '0 hari 0 jam',
+          cpuUsage: 0,
+          memoryUsage: 0,
+          temperature: 0,
+          onuCount: 24,
+          activeONU: 0,
+          lastSeen: '1 jam yang lalu'
+        },
+        {
+          id: '4',
+          name: 'OLT-04',
+          ip: '192.168.1.13',
+          model: 'Nokia ISAM',
+          status: 'warning',
+          uptime: '3 hari 5 jam',
+          cpuUsage: 78,
+          memoryUsage: 85,
+          temperature: 58,
+          onuCount: 20,
+          activeONU: 18,
+          lastSeen: '5 menit yang lalu'
+        },
+        {
+          id: '5',
+          name: 'OLT-05',
+          ip: '192.168.1.14',
+          model: 'ZTE C320',
+          status: 'online',
+          uptime: '22 hari 8 jam',
+          cpuUsage: 32,
+          memoryUsage: 48,
+          temperature: 35,
+          onuCount: 24,
+          activeONU: 22,
+          lastSeen: '1 menit yang lalu'
+        },
+        {
+          id: '6',
+          name: 'OLT-06',
+          ip: '192.168.1.15',
+          model: 'TMO 4EP-4SX-4G-OLT',
+          status: 'online',
+          uptime: '5 hari 14 jam',
+          cpuUsage: 28,
+          memoryUsage: 41,
+          temperature: 33,
+          onuCount: 16,
+          activeONU: 15,
+          lastSeen: '30 detik yang lalu'
+        }
+      ]
+      setDevices(mockDevices)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchDevices()
+  }, [statusFilter, searchTerm])
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'online':
+        return <Badge className="bg-green-500">Online</Badge>
+      case 'offline':
+        return <Badge variant="destructive">Offline</Badge>
+      case 'warning':
+        return <Badge variant="secondary">Warning</Badge>
+      default:
+        return <Badge variant="outline">Unknown</Badge>
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'online':
+        return <Wifi className="h-4 w-4 text-green-500" />
+      case 'offline':
+        return <WifiOff className="h-4 w-4 text-red-500" />
+      case 'warning':
+        return <AlertTriangle className="h-4 w-4 text-yellow-500" />
+      default:
+        return <Server className="h-4 w-4 text-gray-500" />
+    }
+  }
+
+  const getUsageColor = (usage: number) => {
+    if (usage >= 80) return 'text-red-600 dark:text-red-400'
+    if (usage >= 60) return 'text-yellow-600 dark:text-yellow-400'
+    return 'text-green-600 dark:text-green-400'
+  }
+
+  const getTemperatureColor = (temp: number) => {
+    if (temp >= 55) return 'text-red-600 dark:text-red-400'
+    if (temp >= 45) return 'text-yellow-600 dark:text-yellow-400'
+    return 'text-green-600 dark:text-green-400'
+  }
+
+  const filteredDevices = devices.filter(device => {
+    const matchesSearch = device.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         device.ip.includes(searchTerm) ||
+                         device.model.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = statusFilter === 'all' || device.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>OLT Devices</CardTitle>
+          <CardDescription>Loading device information...</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>OLT Devices</CardTitle>
+            <CardDescription>
+              Monitor semua perangkat Optical Line Terminal
+            </CardDescription>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4 mr-2" />
+              Configure
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center space-x-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search OLT devices..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="online">Online</SelectItem>
+              <SelectItem value="offline">Offline</SelectItem>
+              <SelectItem value="warning">Warning</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="rounded-md border">
+          <div className="overflow-x-auto scrollbar-thin">
+            <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Status</TableHead>
+                <TableHead>Device Name</TableHead>
+                <TableHead>IP Address</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Uptime</TableHead>
+                <TableHead>CPU</TableHead>
+                <TableHead>Memory</TableHead>
+                <TableHead>Temp</TableHead>
+                <TableHead>ONU</TableHead>
+                <TableHead>Last Seen</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredDevices.map((device) => (
+                <TableRow key={device.id}>
+                  <TableCell>
+                    <div className="flex items-center space-x-2">
+                      {getStatusIcon(device.status)}
+                      {getStatusBadge(device.status)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-medium">{device.name}</TableCell>
+                  <TableCell>{device.ip}</TableCell>
+                  <TableCell>{device.model}</TableCell>
+                  <TableCell>{device.uptime}</TableCell>
+                  <TableCell>
+                    <span className={getUsageColor(device.cpuUsage)}>
+                      {device.cpuUsage}%
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className={getUsageColor(device.memoryUsage)}>
+                      {device.memoryUsage}%
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className={getTemperatureColor(device.temperature)}>
+                      {device.temperature}°C
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm">
+                      <div>{device.activeONU}/{device.onuCount}</div>
+                      <div className="text-muted-foreground">
+                        {Math.round((device.activeONU / device.onuCount) * 100)}% active
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {device.lastSeen}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center space-x-2">
+                      <Button variant="ghost" size="sm">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenSettings(device)}>
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {filteredDevices.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground">
+            No OLT devices found matching your criteria.
+          </div>
+        )}
+
+        {/* OLT Settings Dialog */}
+        {selectedOLT && (
+          <OLTSettings
+            oltId={selectedOLT.id}
+            oltName={selectedOLT.name}
+            isOpen={settingsOpen}
+            onClose={handleCloseSettings}
+            onSave={handleSaveSettings}
+          />
+        )}
+      </CardContent>
+    </Card>
+  )
+}
