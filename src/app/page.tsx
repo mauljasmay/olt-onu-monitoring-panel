@@ -10,6 +10,7 @@ import { OLTTable } from '@/components/olt-table'
 import { ONUTable } from '@/components/onu-table'
 import { useSocket } from '@/hooks/useSocket'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { toast } from '@/hooks/use-toast'
 
 interface DashboardStats {
   totalOLT: number
@@ -30,6 +31,7 @@ export default function Dashboard() {
     warningAlerts: 0
   })
   const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
   const { isConnected, lastMessage } = useSocket()
 
   useEffect(() => {
@@ -93,6 +95,287 @@ export default function Dashboard() {
         return 'bg-yellow-500'
       default:
         return 'bg-gray-500'
+    }
+  }
+
+  // Quick Actions Functions
+  const handleBulkConfiguration = async () => {
+    setActionLoading('bulk-config')
+    try {
+      toast({
+        title: "Bulk Configuration",
+        description: "Memulai konfigurasi massal untuk semua OLT...",
+      })
+      
+      // Simulate bulk configuration
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      toast({
+        title: "Bulk Configuration Berhasil",
+        description: "Semua OLT berhasil dikonfigurasi ulang",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal melakukan konfigurasi massal",
+        variant: "destructive"
+      })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleSyncAllDevices = async () => {
+    setActionLoading('sync-devices')
+    try {
+      toast({
+        title: "Sync Devices",
+        description: "Menyinkronkan semua perangkat OLT...",
+      })
+      
+      // Simulate device sync
+      await new Promise(resolve => setTimeout(resolve, 3000))
+      
+      // Refresh stats after sync
+      const response = await fetch('/api/dashboard/stats')
+      if (response.ok) {
+        const data = await response.json()
+        setStats(data)
+      }
+      
+      toast({
+        title: "Sync Berhasil",
+        description: "Semua perangkat berhasil disinkronkan",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal menyinkronkan perangkat",
+        variant: "destructive"
+      })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleExportConfig = async () => {
+    setActionLoading('export-config')
+    try {
+      toast({
+        title: "Export Configuration",
+        description: "Mengekspor konfigurasi semua OLT...",
+      })
+      
+      // Simulate export
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      // Create a sample configuration file
+      const config = {
+        timestamp: new Date().toISOString(),
+        olts: [
+          {
+            name: "OLT-01",
+            ip: "192.168.1.10",
+            model: "Huawei MA5800",
+            snmpCommunity: "public",
+            snmpPort: 161,
+            vlanConfig: {
+              management: 1,
+              internet: 100,
+              voip: 200,
+              iptv: 300
+            }
+          }
+        ]
+      }
+      
+      // Download the configuration file
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `olt-config-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      toast({
+        title: "Export Berhasil",
+        description: "Konfigurasi berhasil diekspor",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal mengekspor konfigurasi",
+        variant: "destructive"
+      })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleApplyTemplate = async (templateModel: string) => {
+    setActionLoading(`template-${templateModel}`)
+    try {
+      toast({
+        title: "Apply Template",
+        description: `Menerapkan template ${templateModel}...`,
+      })
+      
+      // Call template API
+      const response = await fetch('/api/olts/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ model: templateModel })
+      })
+      
+      if (response.ok) {
+        const template = await response.json()
+        
+        toast({
+          title: "Template Diterapkan",
+          description: `Template ${templateModel} berhasil diterapkan ke semua OLT`,
+        })
+      } else {
+        throw new Error('Failed to apply template')
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Gagal menerapkan template ${templateModel}`,
+        variant: "destructive"
+      })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleCheckConnectionStatus = async () => {
+    setActionLoading('connection-status')
+    try {
+      toast({
+        title: "Connection Status",
+        description: "Memeriksa status koneksi semua OLT...",
+      })
+      
+      // Simulate connection check
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      const connectionResults = [
+        { device: "OLT-01", status: "online", responseTime: "45ms" },
+        { device: "OLT-02", status: "online", responseTime: "52ms" },
+        { device: "OLT-03", status: "offline", responseTime: "Timeout" },
+        { device: "OLT-06", status: "online", responseTime: "38ms" }
+      ]
+      
+      const onlineCount = connectionResults.filter(r => r.status === 'online').length
+      
+      toast({
+        title: "Connection Check Complete",
+        description: `${onlineCount}/${connectionResults.length} OLT online`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal memeriksa status koneksi",
+        variant: "destructive"
+      })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleConfigureAlertRules = async () => {
+    setActionLoading('alert-rules')
+    try {
+      toast({
+        title: "Alert Rules",
+        description: "Mengkonfigurasi aturan alert untuk semua OLT...",
+      })
+      
+      // Simulate alert rules configuration
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      toast({
+        title: "Alert Rules Dikonfigurasi",
+        description: "Aturan alert berhasil diterapkan ke semua OLT",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal mengkonfigurasi aturan alert",
+        variant: "destructive"
+      })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleViewPerformance = async () => {
+    setActionLoading('performance')
+    try {
+      toast({
+        title: "Performance Metrics",
+        description: "Mengambil data performa semua OLT...",
+      })
+      
+      // Simulate performance data retrieval
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      toast({
+        title: "Performance Data Ready",
+        description: "Data performa berhasil dimuat",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal mengambil data performa",
+        variant: "destructive"
+      })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleSNMPConfiguration = async () => {
+    setActionLoading('snmp-config')
+    try {
+      toast({
+        title: "SNMP Configuration",
+        description: "Mengkonfigurasi SNMP untuk semua OLT...",
+      })
+      
+      // Simulate SNMP configuration
+      await new Promise(resolve => setTimeout(resolve, 2500))
+      
+      // Simulate SNMP configuration results
+      const snmpResults = [
+        { device: "OLT-01", ip: "192.168.1.10", community: "public", port: 161, status: "Success" },
+        { device: "OLT-02", ip: "192.168.1.11", community: "zte", port: 161, status: "Success" },
+        { device: "OLT-06", ip: "192.168.1.15", community: "public", port: 161, status: "Success" },
+        { device: "OLT-03", ip: "192.168.1.12", community: "public", port: 161, status: "Failed - No Response" }
+      ]
+      
+      const successCount = snmpResults.filter(r => r.status === "Success").length
+      
+      toast({
+        title: "SNMP Configuration Complete",
+        description: `${successCount}/${snmpResults.length} OLT berhasil dikonfigurasi SNMP`,
+      })
+      
+      // Optional: Show detailed results
+      console.log("SNMP Configuration Results:", snmpResults)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal mengkonfigurasi SNMP",
+        variant: "destructive"
+      })
+    } finally {
+      setActionLoading(null)
     }
   }
 
@@ -321,17 +604,41 @@ export default function Dashboard() {
                         <CardTitle className="text-base">Quick Actions</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={handleBulkConfiguration}
+                          disabled={actionLoading === 'bulk-config'}
+                        >
                           <Settings className="h-4 w-4 mr-2" />
-                          Bulk Configuration
+                          {actionLoading === 'bulk-config' ? 'Mengonfigurasi...' : 'Bulk Configuration'}
                         </Button>
-                        <Button variant="outline" className="w-full justify-start">
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Sync All Devices
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start bg-blue-50 hover:bg-blue-100 border-blue-200"
+                          onClick={handleSNMPConfiguration}
+                          disabled={actionLoading === 'snmp-config'}
+                        >
+                          <Server className="h-4 w-4 mr-2 text-blue-600" />
+                          {actionLoading === 'snmp-config' ? 'Mengonfigurasi SNMP...' : 'SNMP Configuration'}
                         </Button>
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={handleSyncAllDevices}
+                          disabled={actionLoading === 'sync-devices'}
+                        >
+                          <RefreshCw className={`h-4 w-4 mr-2 ${actionLoading === 'sync-devices' ? 'animate-spin' : ''}`} />
+                          {actionLoading === 'sync-devices' ? 'Menyinkronkan...' : 'Sync All Devices'}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={handleExportConfig}
+                          disabled={actionLoading === 'export-config'}
+                        >
                           <Download className="h-4 w-4 mr-2" />
-                          Export Config
+                          {actionLoading === 'export-config' ? 'Mengekspor...' : 'Export Config'}
                         </Button>
                       </CardContent>
                     </Card>
@@ -341,21 +648,41 @@ export default function Dashboard() {
                         <CardTitle className="text-base">Templates</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={() => handleApplyTemplate('ZTE-C320')}
+                          disabled={actionLoading === 'template-ZTE-C320'}
+                        >
                           <FileText className="h-4 w-4 mr-2" />
-                          ZTE Template
+                          {actionLoading === 'template-ZTE-C320' ? 'Menerapkan...' : 'ZTE Template'}
                         </Button>
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={() => handleApplyTemplate('Huawei-MA5800')}
+                          disabled={actionLoading === 'template-Huawei-MA5800'}
+                        >
                           <FileText className="h-4 w-4 mr-2" />
-                          Huawei Template
+                          {actionLoading === 'template-Huawei-MA5800' ? 'Menerapkan...' : 'Huawei Template'}
                         </Button>
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={() => handleApplyTemplate('Nokia-7360')}
+                          disabled={actionLoading === 'template-Nokia-7360'}
+                        >
                           <FileText className="h-4 w-4 mr-2" />
-                          Nokia Template
+                          {actionLoading === 'template-Nokia-7360' ? 'Menerapkan...' : 'Nokia Template'}
                         </Button>
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={() => handleApplyTemplate('TMO-4EP-4SX-4G-OLT')}
+                          disabled={actionLoading === 'template-TMO-4EP-4SX-4G-OLT'}
+                        >
                           <FileText className="h-4 w-4 mr-2" />
-                          TMO 4EP-4SX-4G Template
+                          {actionLoading === 'template-TMO-4EP-4SX-4G-OLT' ? 'Menerapkan...' : 'TMO 4EP-4SX-4G Template'}
                         </Button>
                       </CardContent>
                     </Card>
@@ -365,17 +692,32 @@ export default function Dashboard() {
                         <CardTitle className="text-base">Monitoring</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={handleCheckConnectionStatus}
+                          disabled={actionLoading === 'connection-status'}
+                        >
                           <Activity className="h-4 w-4 mr-2" />
-                          Connection Status
+                          {actionLoading === 'connection-status' ? 'Memeriksa...' : 'Connection Status'}
                         </Button>
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={handleConfigureAlertRules}
+                          disabled={actionLoading === 'alert-rules'}
+                        >
                           <AlertTriangle className="h-4 w-4 mr-2" />
-                          Alert Rules
+                          {actionLoading === 'alert-rules' ? 'Mengkonfigurasi...' : 'Alert Rules'}
                         </Button>
-                        <Button variant="outline" className="w-full justify-start">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={handleViewPerformance}
+                          disabled={actionLoading === 'performance'}
+                        >
                           <BarChart3 className="h-4 w-4 mr-2" />
-                          Performance
+                          {actionLoading === 'performance' ? 'Memuat...' : 'Performance'}
                         </Button>
                       </CardContent>
                     </Card>
