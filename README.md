@@ -23,8 +23,8 @@
 
 ### 📊 Dashboard Monitoring Real-time
 <div align="center">
-  <img src="./docs/images/dashboard.png" alt="Dashboard" width="800">
-  <p><em>Dashboard monitoring dengan data real-time dan analytics</em></p>
+  <img src="./docs/images/enhanced-dashboard.png" alt="Enhanced Dashboard" width="800">
+  <p><em>Advanced dashboard dengan real-time analytics dan comprehensive monitoring</em></p>
 </div>
 
 ### 🔐 Login & Authentication
@@ -55,11 +55,14 @@
 - ✅ JWT token authentication
 
 ### 📊 **Monitoring Real-time**
-- ✅ Dashboard analytics dengan Socket.IO
-- ✅ Real-time device status updates
-- ✅ Performance metrics dan alerts
-- ✅ Historical data tracking
-- ✅ Customizable alert rules
+- ✅ Advanced analytics dengan interactive charts
+- ✅ Real-time device status updates dengan Socket.IO
+- ✅ Network topology visualization yang interaktif
+- ✅ Performance metrics dan bandwidth monitoring
+- ✅ Historical data tracking dan trend analysis
+- ✅ Customizable alert rules dan notifications
+- ✅ Multi-tab dashboard interface (6 tabs comprehensive)
+- ✅ Live data streaming dengan auto-refresh
 
 ### 🎨 **UI/UX Modern**
 - ✅ Shadcn/ui component library
