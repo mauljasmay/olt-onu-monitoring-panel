@@ -1,1059 +1,691 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useSession, signOut } from 'next-auth/react'
+import { useState } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Activity, AlertTriangle, CheckCircle, Server, Wifi, WifiOff, Users, Cable, Settings, RefreshCw, Download, FileText, BarChart3, LogOut, User } from 'lucide-react'
-import { OLTTable } from '@/components/olt-table'
-import { ONUTable } from '@/components/onu-table'
-import { useSocket } from '@/hooks/useSocket'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { 
+  Server, 
+  Wifi, 
+  Shield, 
+  Users, 
+  Zap, 
+  Globe, 
+  CheckCircle, 
+  ArrowRight, 
+  Mail, 
+  Phone, 
+  MapPin,
+  Clock,
+  Database,
+  Lock,
+  Network,
+  BarChart3,
+  Settings,
+  Router,
+  Cloud,
+  Cpu,
+  HardDrive,
+  Activity
+} from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
-interface DashboardStats {
-  totalOLT: number
-  onlineOLT: number
-  totalONU: number
-  onlineONU: number
-  criticalAlerts: number
-  warningAlerts: number
-}
-
-export default function Dashboard() {
-  const { data: session, status } = useSession()
-  const [stats, setStats] = useState<DashboardStats>({
-    totalOLT: 0,
-    onlineOLT: 0,
-    totalONU: 0,
-    onlineONU: 0,
-    criticalAlerts: 0,
-    warningAlerts: 0
+export default function LandingPage() {
+  const [selectedPlan, setSelectedPlan] = useState<string>('')
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false)
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+    plan: '',
+    message: ''
   })
-  const [loading, setLoading] = useState(true)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [tmoIpAddress, setTmoIpAddress] = useState('')
-  const [showTmoDialog, setShowTmoDialog] = useState(false)
-  const { isConnected, lastMessage } = useSocket()
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await fetch('/api/dashboard/stats')
-        if (response.ok) {
-          const data = await response.json()
-          setStats(data)
-        }
-      } catch (error) {
-        console.error('Failed to fetch stats:', error)
-        // Fallback to mock data
-        setStats({
-          totalOLT: 5,
-          onlineOLT: 4,
-          totalONU: 128,
-          onlineONU: 115,
-          criticalAlerts: 2,
-          warningAlerts: 8
-        })
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    // Only fetch stats if authenticated
-    if (status === 'authenticated') {
-      fetchStats()
-    }
-  }, [status])
-
-  // Handle real-time updates
-  useEffect(() => {
-    if (lastMessage && status === 'authenticated') {
-      switch (lastMessage.type) {
-        case 'device-status-changed':
-        case 'device-metrics-updated':
-          // Refresh stats when device changes
-          fetch('/api/dashboard/stats')
-            .then(res => res.json())
-            .then(data => setStats(data))
-            .catch(console.error)
-          break
-        case 'alert-created':
-          // Update alert counts
-          if (lastMessage.data.type === 'critical') {
-            setStats(prev => ({ ...prev, criticalAlerts: prev.criticalAlerts + 1 }))
-          } else if (lastMessage.data.type === 'warning') {
-            setStats(prev => ({ ...prev, warningAlerts: prev.warningAlerts + 1 }))
-          }
-          break
-      }
-    }
-  }, [lastMessage, status])
-
-  // Handle authentication
-  if (status === 'loading') {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-      </div>
-    )
+  const handleOrderNow = (planType: string) => {
+    setSelectedPlan(planType)
+    setContactForm(prev => ({ ...prev, plan: planType }))
+    setOrderDialogOpen(true)
   }
 
-  if (status === 'unauthenticated') {
-    return null // Will be redirected by middleware
-  }
+  const handleSubmitOrder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
 
-  const handleLogout = async () => {
     try {
-      await signOut({ callbackUrl: '/login' })
-      toast({
-        title: "Logout Berhasil",
-        description: "Anda telah keluar dari dashboard",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Gagal melakukan logout",
-        variant: "destructive"
-      })
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'online':
-        return 'bg-green-500'
-      case 'offline':
-        return 'bg-red-500'
-      case 'warning':
-        return 'bg-yellow-500'
-      default:
-        return 'bg-gray-500'
-    }
-  }
-
-  // Quick Actions Functions
-  const handleBulkConfiguration = async () => {
-    setActionLoading('bulk-config')
-    try {
-      toast({
-        title: "Bulk Configuration",
-        description: "Memulai konfigurasi massal untuk semua OLT...",
+      // Call the contact API
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(contactForm)
       })
       
-      // Simulate bulk configuration
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      toast({
-        title: "Bulk Configuration Berhasil",
-        description: "Semua OLT berhasil dikonfigurasi ulang",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Gagal melakukan konfigurasi massal",
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleSyncAllDevices = async () => {
-    setActionLoading('sync-devices')
-    try {
-      toast({
-        title: "Sync Devices",
-        description: "Menyinkronkan semua perangkat OLT...",
-      })
-      
-      // Simulate device sync
-      await new Promise(resolve => setTimeout(resolve, 3000))
-      
-      // Refresh stats after sync
-      const response = await fetch('/api/dashboard/stats')
       if (response.ok) {
         const data = await response.json()
-        setStats(data)
-      }
-      
-      toast({
-        title: "Sync Berhasil",
-        description: "Semua perangkat berhasil disinkronkan",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Gagal menyinkronkan perangkat",
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleExportConfig = async () => {
-    setActionLoading('export-config')
-    try {
-      toast({
-        title: "Export Configuration",
-        description: "Mengekspor konfigurasi semua OLT...",
-      })
-      
-      // Simulate export
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      // Create a sample configuration file
-      const config = {
-        timestamp: new Date().toISOString(),
-        olts: [
-          {
-            name: "OLT-01",
-            ip: "192.168.1.10",
-            model: "Huawei MA5800",
-            snmpCommunity: "public",
-            snmpPort: 161,
-            vlanConfig: {
-              management: 1,
-              internet: 100,
-              voip: 200,
-              iptv: 300
-            }
-          }
-        ]
-      }
-      
-      // Download the configuration file
-      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `olt-config-${new Date().toISOString().split('T')[0]}.json`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      
-      toast({
-        title: "Export Berhasil",
-        description: "Konfigurasi berhasil diekspor",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Gagal mengekspor konfigurasi",
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleApplyTemplate = async (templateModel: string) => {
-    // Special handling for TMO template
-    if (templateModel === 'TMO-4EP-4SX-4G-OLT') {
-      setShowTmoDialog(true)
-      return
-    }
-
-    setActionLoading(`template-${templateModel}`)
-    try {
-      toast({
-        title: "Apply Template",
-        description: `Menerapkan template ${templateModel}...`,
-      })
-      
-      // Call template API
-      const response = await fetch('/api/olts/templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ model: templateModel })
-      })
-      
-      if (response.ok) {
-        const template = await response.json()
         
         toast({
-          title: "Template Diterapkan",
-          description: `Template ${templateModel} berhasil diterapkan ke semua OLT`,
-        })
-      } else {
-        throw new Error('Failed to apply template')
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: `Gagal menerapkan template ${templateModel}`,
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleApplyTmoTemplate = async () => {
-    if (!tmoIpAddress.trim()) {
-      toast({
-        title: "Error",
-        description: "IP address harus diisi untuk template TMO",
-        variant: "destructive"
-      })
-      return
-    }
-
-    // Validate IP address format
-    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
-    if (!ipRegex.test(tmoIpAddress.trim())) {
-      toast({
-        title: "Error", 
-        description: "Format IP address tidak valid",
-        variant: "destructive"
-      })
-      return
-    }
-
-    setActionLoading('template-TMO-4EP-4SX-4G-OLT')
-    try {
-      toast({
-        title: "Apply TMO Template",
-        description: `Menerapkan template TMO dengan IP ${tmoIpAddress}...`,
-      })
-      
-      // Call TMO template API with custom IP
-      const response = await fetch('/api/olts/templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          model: 'TMO-4EP-4SX-4G-OLT',
-          customIp: tmoIpAddress.trim(),
-          snmpConfig: {
-            community: 'public',
-            port: 161,
-            version: '2c'
-          }
-        })
-      })
-      
-      if (response.ok) {
-        const template = await response.json()
-        
-        toast({
-          title: "TMO Template Diterapkan",
-          description: `Template TMO berhasil diterapkan dengan IP ${tmoIpAddress}`,
+          title: "Pesanan Diterima!",
+          description: "Tim kami akan menghubungi Anda dalam 24 jam.",
         })
         
         // Reset form
-        setTmoIpAddress('')
-        setShowTmoDialog(false)
+        setContactForm({
+          name: '',
+          email: '',
+          phone: '',
+          company: '',
+          plan: '',
+          message: ''
+        })
+        setOrderDialogOpen(false)
       } else {
-        throw new Error('Failed to apply TMO template')
+        throw new Error('Failed to submit order')
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: `Gagal menerapkan template TMO dengan IP ${tmoIpAddress}`,
+        description: "Gagal mengirim pesanan. Silakan coba lagi.",
         variant: "destructive"
       })
     } finally {
-      setActionLoading(null)
+      setIsSubmitting(false)
     }
   }
 
-  const handleCheckConnectionStatus = async () => {
-    setActionLoading('connection-status')
-    try {
-      toast({
-        title: "Connection Status",
-        description: "Memeriksa status koneksi semua OLT...",
-      })
-      
-      // Simulate connection check
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      const connectionResults = [
-        { device: "OLT-01", status: "online", responseTime: "45ms" },
-        { device: "OLT-02", status: "online", responseTime: "52ms" },
-        { device: "OLT-03", status: "offline", responseTime: "Timeout" },
-        { device: "OLT-06", status: "online", responseTime: "38ms" }
+  const pricingPlans = [
+    {
+      id: 'basic',
+      name: 'Basic',
+      price: 'Rp 500.000',
+      period: '/bulan',
+      description: 'Cocok untuk usaha kecil dan startup',
+      features: [
+        '50 Pengguna Aktif',
+        '1 RADIUS Server',
+        'Support Email',
+        '99.5% Uptime',
+        'Basic Analytics',
+        'SSL Certificate'
+      ],
+      notIncluded: [
+        'Custom Configuration',
+        'Priority Support',
+        'Advanced Analytics',
+        'Multi-Server'
+      ],
+      popular: false,
+      icon: <Server className="h-6 w-6" />
+    },
+    {
+      id: 'professional',
+      name: 'Professional',
+      price: 'Rp 1.500.000',
+      period: '/bulan',
+      description: 'Ideal untuk perusahaan menengah',
+      features: [
+        '200 Pengguna Aktif',
+        '2 RADIUS Server',
+        'Support 24/7',
+        '99.9% Uptime',
+        'Advanced Analytics',
+        'SSL Certificate',
+        'Custom Configuration',
+        'API Access'
+      ],
+      notIncluded: [
+        'Dedicated Server',
+        'White Label',
+        'Multi-Location'
+      ],
+      popular: true,
+      icon: <Network className="h-6 w-6" />
+    },
+    {
+      id: 'enterprise',
+      name: 'Enterprise',
+      price: 'Rp 5.000.000',
+      period: '/bulan',
+      description: 'Solusi lengkap untuk perusahaan besar',
+      features: [
+        'Unlimited Pengguna',
+        'Dedicated RADIUS Server',
+        'Priority Support 24/7',
+        '99.99% Uptime',
+        'Real-time Analytics',
+        'Custom SSL',
+        'Full Customization',
+        'API Access',
+        'Multi-Location',
+        'White Label Option',
+        'Backup & Recovery'
+      ],
+      notIncluded: [],
+      popular: false,
+      icon: <Cloud className="h-6 w-6" />
+    }
+  ]
+
+  const features = [
+    {
+      icon: <Shield className="h-8 w-8 text-blue-600" />,
+      title: 'Keamanan Terjamin',
+      description: 'Enkripsi data end-to-end dengan protokol keamanan terkini untuk melindungi informasi pengguna.'
+    },
+    {
+      icon: <Zap className="h-8 w-8 text-yellow-600" />,
+      title: 'Performa Tinggi',
+      description: 'Server high-performance dengan latency rendah dan throughput tinggi untuk koneksi yang stabil.'
+    },
+    {
+      icon: <Users className="h-8 w-8 text-green-600" />,
+      title: 'Manajemen Mudah',
+      description: 'Dashboard intuitif untuk mengelola pengguna, monitoring real-time, dan laporan lengkap.'
+    },
+    {
+      icon: <Globe className="h-8 w-8 text-purple-600" />,
+      title: 'Skalabilitas Global',
+      description: 'Infrastruktur global yang dapat diskalakan sesuai kebutuhan bisnis Anda.'
+    },
+    {
+      icon: <Clock className="h-8 w-8 text-red-600" />,
+      title: 'Uptime 99.9%',
+      description: 'Garansi uptime 99.9% dengan monitoring 24/7 dan backup otomatis.'
+    },
+    {
+      icon: <Settings className="h-8 w-8 text-indigo-600" />,
+      title: 'Konfigurasi Fleksibel',
+      description: 'Sesuaikan pengaturan RADIUS sesuai kebutuhan spesifik infrastruktur Anda.'
+    }
+  ]
+
+  const technicalSpecs = [
+    {
+      category: 'Server Specifications',
+      items: [
+        { label: 'Processor', value: 'Intel Xeon E5-2680 v4' },
+        { label: 'RAM', value: '32GB DDR4 ECC' },
+        { label: 'Storage', value: '1TB NVMe SSD RAID-1' },
+        { label: 'Network', value: '1Gbps Dedicated Port' }
       ]
-      
-      const onlineCount = connectionResults.filter(r => r.status === 'online').length
-      
-      toast({
-        title: "Connection Check Complete",
-        description: `${onlineCount}/${connectionResults.length} OLT online`,
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Gagal memeriksa status koneksi",
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleConfigureAlertRules = async () => {
-    setActionLoading('alert-rules')
-    try {
-      toast({
-        title: "Alert Rules",
-        description: "Mengkonfigurasi aturan alert untuk semua OLT...",
-      })
-      
-      // Simulate alert rules configuration
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      toast({
-        title: "Alert Rules Dikonfigurasi",
-        description: "Aturan alert berhasil diterapkan ke semua OLT",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Gagal mengkonfigurasi aturan alert",
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleViewPerformance = async () => {
-    setActionLoading('performance')
-    try {
-      toast({
-        title: "Performance Metrics",
-        description: "Mengambil data performa semua OLT...",
-      })
-      
-      // Simulate performance data retrieval
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      toast({
-        title: "Performance Data Ready",
-        description: "Data performa berhasil dimuat",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Gagal mengambil data performa",
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleSNMPConfiguration = async () => {
-    setActionLoading('snmp-config')
-    try {
-      toast({
-        title: "SNMP Configuration",
-        description: "Mengkonfigurasi SNMP untuk semua OLT...",
-      })
-      
-      // Simulate SNMP configuration
-      await new Promise(resolve => setTimeout(resolve, 2500))
-      
-      // Simulate SNMP configuration results
-      const snmpResults = [
-        { device: "OLT-01", ip: "192.168.1.10", community: "public", port: 161, status: "Success" },
-        { device: "OLT-02", ip: "192.168.1.11", community: "zte", port: 161, status: "Success" },
-        { device: "OLT-06", ip: "192.168.1.15", community: "public", port: 161, status: "Success" },
-        { device: "OLT-03", ip: "192.168.1.12", community: "public", port: 161, status: "Failed - No Response" }
+    },
+    {
+      category: 'RADIUS Features',
+      items: [
+        { label: 'Protocol Support', value: 'RADIUS, CoA, DM' },
+        { label: 'Authentication', value: 'PAP, CHAP, MS-CHAPv2, EAP' },
+        { label: 'Database', value: 'MySQL/PostgreSQL with Replication' },
+        { label: 'Backup', value: 'Daily Automatic Backup' }
       ]
-      
-      const successCount = snmpResults.filter(r => r.status === "Success").length
-      
-      toast({
-        title: "SNMP Configuration Complete",
-        description: `${successCount}/${snmpResults.length} OLT berhasil dikonfigurasi SNMP`,
-      })
-      
-      // Optional: Show detailed results
-      console.log("SNMP Configuration Results:", snmpResults)
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Gagal mengkonfigurasi SNMP",
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
+    },
+    {
+      category: 'Security & Compliance',
+      items: [
+        { label: 'Encryption', value: 'AES-256, TLS 1.3' },
+        { label: 'Compliance', value: 'ISO 27001, SOC 2 Type II' },
+        { label: 'Monitoring', value: '24/7 Security Monitoring' },
+        { label: 'Audit Logs', value: 'Complete Audit Trail' }
+      ]
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
+  ]
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">OLT & ONU Monitoring Panel</h1>
-            <p className="text-muted-foreground">
-              Monitor jaringan fiber optic secara real-time
-            </p>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Badge variant="outline" className="flex items-center space-x-1">
-              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-              <span>{isConnected ? 'Live' : 'Offline'}</span>
-            </Badge>
-            
-            {/* User Info */}
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+      {/* Navigation */}
+      <nav className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
-              <Badge variant="secondary" className="flex items-center space-x-1">
-                <User className="h-3 w-3" />
-                <span>{session?.user?.username}</span>
-                <span className="text-xs">({session?.user?.role})</span>
-              </Badge>
+              <Server className="h-8 w-8 text-blue-600" />
+              <span className="text-xl font-bold text-gray-900">MLJNET RADIUS</span>
             </div>
-            
-            <ThemeToggle />
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
+            <div className="hidden md:flex items-center space-x-8">
+              <Link href="#features" className="text-gray-700 hover:text-blue-600 transition-colors">
+                Fitur
+              </Link>
+              <Link href="#pricing" className="text-gray-700 hover:text-blue-600 transition-colors">
+                Harga
+              </Link>
+              <Link href="#specs" className="text-gray-700 hover:text-blue-600 transition-colors">
+                Spesifikasi
+              </Link>
+              <Link href="#contact" className="text-gray-700 hover:text-blue-600 transition-colors">
+                Kontak
+              </Link>
+              <Link href="/login" className="text-gray-700 hover:text-blue-600 transition-colors">
+                Login
+              </Link>
+              <Link href="/dashboard" className="text-gray-700 hover:text-blue-600 transition-colors">
+                Dashboard
+              </Link>
+            </div>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              Mulai Gratis
             </Button>
           </div>
         </div>
+      </nav>
 
-        {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total OLT</CardTitle>
-              <Server className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalOLT}</div>
-              <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>{stats.onlineOLT} Online</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total ONU</CardTitle>
-              <Wifi className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalONU}</div>
-              <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>{stats.onlineONU} Online</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Critical Alerts</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{stats.criticalAlerts}</div>
-              <p className="text-xs text-muted-foreground">
-                Memerlukan perhatian segera
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Warning Alerts</CardTitle>
-              <Activity className="h-4 w-4 text-yellow-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">{stats.warningAlerts}</div>
-              <p className="text-xs text-muted-foreground">
-                Perlu dipantau
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Main Content */}
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="olt">OLT Devices</TabsTrigger>
-            <TabsTrigger value="onu">ONU Devices</TabsTrigger>
-            <TabsTrigger value="settings">OLT Settings</TabsTrigger>
-            <TabsTrigger value="alerts">Alerts</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>OLT Status Summary</CardTitle>
-                  <CardDescription>
-                    Status keseluruhan perangkat OLT
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      <span className="text-sm">Online</span>
-                    </div>
-                    <Badge variant="secondary">{stats.onlineOLT}/{stats.totalOLT}</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <WifiOff className="h-4 w-4 text-red-500" />
-                      <span className="text-sm">Offline</span>
-                    </div>
-                    <Badge variant="destructive">{stats.totalOLT - stats.onlineOLT}</Badge>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-green-500 h-2 rounded-full" 
-                      style={{ width: `${(stats.onlineOLT / stats.totalOLT) * 100}%` }}
-                    ></div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>ONU Status Summary</CardTitle>
-                  <CardDescription>
-                    Status keseluruhan perangkat ONU
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      <span className="text-sm">Online</span>
-                    </div>
-                    <Badge variant="secondary">{stats.onlineONU}/{stats.totalONU}</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <WifiOff className="h-4 w-4 text-red-500" />
-                      <span className="text-sm">Offline</span>
-                    </div>
-                    <Badge variant="destructive">{stats.totalONU - stats.onlineONU}</Badge>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-green-500 h-2 rounded-full" 
-                      style={{ width: `${(stats.onlineONU / stats.totalONU) * 100}%` }}
-                    ></div>
-                  </div>
-                </CardContent>
-              </Card>
+      {/* Hero Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto text-center">
+          <Badge className="mb-4 bg-blue-100 text-blue-800 hover:bg-blue-200">
+            🚀 Solusi RADIUS Server Terpercaya
+          </Badge>
+          <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+            Sewa RADIUS Server
+            <span className="text-blue-600"> Professional</span>
+          </h1>
+          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+            Solusi autentikasi network yang aman, andal, dan skalabel untuk ISP, Hotel, WiFi Provider, dan Enterprise. 
+            Deploy dalam hitungan menit, tanpa perlu investasi hardware mahal.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-lg px-8 py-3">
+              Coba Gratis 7 Hari
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+            <Button size="lg" variant="outline" className="text-lg px-8 py-3">
+              <Phone className="mr-2 h-5 w-5" />
+              Konsultasi Gratis
+            </Button>
+          </div>
+          
+          {/* Trust Indicators */}
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600">500+</div>
+              <div className="text-gray-600">Klien Aktif</div>
             </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600">99.9%</div>
+              <div className="text-gray-600">Uptime</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600">24/7</div>
+              <div className="text-gray-600">Support</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600">5 Tahun</div>
+              <div className="text-gray-600">Pengalaman</div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            <Card>
+      {/* Features Section */}
+      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Mengapa Memilih Kami?
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Fitur lengkap untuk mendukung kebutuhan autentikasi network Anda
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {features.map((feature, index) => (
+              <Card key={index} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="mb-4">{feature.icon}</div>
+                  <CardTitle className="text-xl">{feature.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-600">{feature.description}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Paket Harga yang Fleksibel
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Pilih paket yang sesuai dengan kebutuhan dan skala bisnis Anda
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            {pricingPlans.map((plan) => (
+              <Card key={plan.id} className={`relative ${plan.popular ? 'border-blue-500 shadow-xl' : 'hover:shadow-lg transition-shadow'}`}>
+                {plan.popular && (
+                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                    <Badge className="bg-blue-600 text-white px-4 py-1">
+                      Paling Populer
+                    </Badge>
+                  </div>
+                )}
+                <CardHeader className="text-center pb-8">
+                  <div className="flex justify-center mb-4">
+                    {plan.icon}
+                  </div>
+                  <CardTitle className="text-2xl">{plan.name}</CardTitle>
+                  <CardDescription className="text-gray-600">
+                    {plan.description}
+                  </CardDescription>
+                  <div className="mt-4">
+                    <span className="text-4xl font-bold">{plan.price}</span>
+                    <span className="text-gray-600">{plan.period}</span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    {plan.features.map((feature, index) => (
+                      <div key={index} className="flex items-center space-x-3">
+                        <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                        <span className="text-sm">{feature}</span>
+                      </div>
+                    ))}
+                    {plan.notIncluded.map((feature, index) => (
+                      <div key={index} className="flex items-center space-x-3 opacity-50">
+                        <div className="h-5 w-5 border-2 border-gray-300 rounded-full flex-shrink-0"></div>
+                        <span className="text-sm">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Button 
+                    className={`w-full ${plan.popular ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                    variant={plan.popular ? 'default' : 'outline'}
+                    onClick={() => handleOrderNow(plan.name)}
+                  >
+                    {plan.popular ? 'Pilih Sekarang' : 'Pilih Paket'}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Technical Specifications */}
+      <section id="specs" className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Spesifikasi Teknis
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Infrastruktur modern dengan teknologi terkini
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            {technicalSpecs.map((spec, index) => (
+              <Card key={index}>
+                <CardHeader>
+                  <CardTitle className="text-lg">{spec.category}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {spec.items.map((item, itemIndex) => (
+                      <div key={itemIndex} className="flex justify-between">
+                        <span className="text-sm text-gray-600">{item.label}</span>
+                        <span className="text-sm font-medium">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Use Cases */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Cocok untuk Berbagai Industri
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Solusi autentikasi yang fleksibel untuk berbagai kebutuhan
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { icon: <Wifi className="h-8 w-8" />, title: 'ISP Provider', desc: 'Manajemen pelanggan broadband' },
+              { icon: <Router className="h-8 w-8" />, title: 'Hotel & Hospitality', desc: 'WiFi guest authentication' },
+              { icon: <Network className="h-8 w-8" />, title: 'Enterprise', desc: 'Corporate network access' },
+              { icon: <Cloud className="h-8 w-8" />, title: 'WiFi Provider', desc: 'Public hotspot management' }
+            ].map((useCase, index) => (
+              <Card key={index} className="text-center hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex justify-center text-blue-600 mb-4">
+                    {useCase.icon}
+                  </div>
+                  <CardTitle className="text-lg">{useCase.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-600 text-sm">{useCase.desc}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-blue-600">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            Siap Memulai?
+          </h2>
+          <p className="text-xl text-blue-100 mb-8">
+            Coba gratis 7 hari. Tidak perlu kartu kredit.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button size="lg" className="bg-white text-blue-600 hover:bg-gray-100">
+              Mulai Uji Coba Gratis
+            </Button>
+            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-600">
+              Jadwalkan Demo
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section id="contact" className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Hubungi Kami
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Tim kami siap membantu menemukan solusi terbaik untuk Anda
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8 mb-12">
+            <Card className="text-center">
               <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>
-                  Aktivitas monitoring terbaru
-                </CardDescription>
+                <Mail className="h-8 w-8 text-blue-600 mx-auto mb-4" />
+                <CardTitle>Email</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">OLT-01 kembali online</p>
-                      <p className="text-xs text-muted-foreground">2 menit yang lalu</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">ONU-045 sinyal lemah</p>
-                      <p className="text-xs text-muted-foreground">15 menit yang lalu</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">OLT-03 tidak responsif</p>
-                      <p className="text-xs text-muted-foreground">1 jam yang lalu</p>
-                    </div>
-                  </div>
-                </div>
+                <p className="text-gray-600">info@mljnet-radius.com</p>
+                <p className="text-gray-600">support@mljnet-radius.com</p>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="olt">
-            <OLTTable />
-          </TabsContent>
-
-          <TabsContent value="onu">
-            <ONUTable />
-          </TabsContent>
-
-          <TabsContent value="settings">
-            <Card>
+            
+            <Card className="text-center">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Settings className="h-5 w-5" />
-                  <span>OLT Configuration Management</span>
-                </CardTitle>
-                <CardDescription>
-                  Kelola konfigurasi dan pengaturan untuk semua perangkat OLT
-                </CardDescription>
+                <Phone className="h-8 w-8 text-blue-600 mx-auto mb-4" />
+                <CardTitle>Telepon</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    <Card className="border-dashed">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Quick Actions</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={handleBulkConfiguration}
-                          disabled={actionLoading === 'bulk-config'}
-                        >
-                          <Settings className="h-4 w-4 mr-2" />
-                          {actionLoading === 'bulk-config' ? 'Mengonfigurasi...' : 'Bulk Configuration'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start bg-blue-50 hover:bg-blue-100 border-blue-200"
-                          onClick={handleSNMPConfiguration}
-                          disabled={actionLoading === 'snmp-config'}
-                        >
-                          <Server className="h-4 w-4 mr-2 text-blue-600" />
-                          {actionLoading === 'snmp-config' ? 'Mengonfigurasi SNMP...' : 'SNMP Configuration'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={handleSyncAllDevices}
-                          disabled={actionLoading === 'sync-devices'}
-                        >
-                          <RefreshCw className={`h-4 w-4 mr-2 ${actionLoading === 'sync-devices' ? 'animate-spin' : ''}`} />
-                          {actionLoading === 'sync-devices' ? 'Menyinkronkan...' : 'Sync All Devices'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={handleExportConfig}
-                          disabled={actionLoading === 'export-config'}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          {actionLoading === 'export-config' ? 'Mengekspor...' : 'Export Config'}
-                        </Button>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border-dashed">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Templates</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={() => handleApplyTemplate('ZTE-C320')}
-                          disabled={actionLoading === 'template-ZTE-C320'}
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          {actionLoading === 'template-ZTE-C320' ? 'Menerapkan...' : 'ZTE Template'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={() => handleApplyTemplate('Huawei-MA5800')}
-                          disabled={actionLoading === 'template-Huawei-MA5800'}
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          {actionLoading === 'template-Huawei-MA5800' ? 'Menerapkan...' : 'Huawei Template'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={() => handleApplyTemplate('Nokia-7360')}
-                          disabled={actionLoading === 'template-Nokia-7360'}
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          {actionLoading === 'template-Nokia-7360' ? 'Menerapkan...' : 'Nokia Template'}
-                        </Button>
-                        <Dialog open={showTmoDialog} onOpenChange={setShowTmoDialog}>
-                          <DialogTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              className="w-full justify-start"
-                              disabled={actionLoading === 'template-TMO-4EP-4SX-4G-OLT'}
-                            >
-                              <FileText className="h-4 w-4 mr-2" />
-                              TMO 4EP-4SX-4G Template
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-[425px]">
-                            <DialogHeader>
-                              <DialogTitle className="flex items-center space-x-2">
-                                <FileText className="h-5 w-5" />
-                                <span>Konfigurasi TMO Template</span>
-                              </DialogTitle>
-                              <DialogDescription>
-                                Masukkan IP address untuk konfigurasi SNMP get pada perangkat TMO 4EP-4SX-4G-OLT
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="tmo-ip" className="text-right">
-                                  IP Address
-                                </Label>
-                                <Input
-                                  id="tmo-ip"
-                                  placeholder="192.168.1.100"
-                                  value={tmoIpAddress}
-                                  onChange={(e) => setTmoIpAddress(e.target.value)}
-                                  className="col-span-3"
-                                />
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="snmp-community" className="text-right">
-                                  SNMP Community
-                                </Label>
-                                <Input
-                                  id="snmp-community"
-                                  value="public"
-                                  disabled
-                                  className="col-span-3 bg-muted"
-                                />
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="snmp-port" className="text-right">
-                                  SNMP Port
-                                </Label>
-                                <Input
-                                  id="snmp-port"
-                                  value="161"
-                                  disabled
-                                  className="col-span-3 bg-muted"
-                                />
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="snmp-version" className="text-right">
-                                  SNMP Version
-                                </Label>
-                                <Input
-                                  id="snmp-version"
-                                  value="2c"
-                                  disabled
-                                  className="col-span-3 bg-muted"
-                                />
-                              </div>
-                            </div>
-                            <div className="bg-blue-50 p-3 rounded-md">
-                              <p className="text-sm text-blue-800">
-                                <strong>Catatan:</strong> Template TMO akan mengkonfigurasi SNMP get untuk monitoring status perangkat, 
-                                utilization port, dan performa ONU secara otomatis.
-                              </p>
-                            </div>
-                            <DialogFooter>
-                              <Button 
-                                type="button" 
-                                variant="outline" 
-                                onClick={() => setShowTmoDialog(false)}
-                              >
-                                Batal
-                              </Button>
-                              <Button 
-                                type="button" 
-                                onClick={handleApplyTmoTemplate}
-                                disabled={actionLoading === 'template-TMO-4EP-4SX-4G-OLT'}
-                              >
-                                {actionLoading === 'template-TMO-4EP-4SX-4G-OLT' ? 'Menerapkan...' : 'Terapkan Template'}
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border-dashed">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Monitoring</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={handleCheckConnectionStatus}
-                          disabled={actionLoading === 'connection-status'}
-                        >
-                          <Activity className="h-4 w-4 mr-2" />
-                          {actionLoading === 'connection-status' ? 'Memeriksa...' : 'Connection Status'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={handleConfigureAlertRules}
-                          disabled={actionLoading === 'alert-rules'}
-                        >
-                          <AlertTriangle className="h-4 w-4 mr-2" />
-                          {actionLoading === 'alert-rules' ? 'Mengkonfigurasi...' : 'Alert Rules'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={handleViewPerformance}
-                          disabled={actionLoading === 'performance'}
-                        >
-                          <BarChart3 className="h-4 w-4 mr-2" />
-                          {actionLoading === 'performance' ? 'Memuat...' : 'Performance'}
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <div className="border-t pt-6">
-                    <h3 className="text-lg font-semibold mb-4">Device Configuration Summary</h3>
-                    <div className="rounded-md border">
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b bg-muted/50">
-                              <th className="text-left p-3 font-medium">Device Name</th>
-                              <th className="text-left p-3 font-medium">IP Address</th>
-                              <th className="text-left p-3 font-medium">Model</th>
-                              <th className="text-left p-3 font-medium">Location</th>
-                              <th className="text-left p-3 font-medium">Status</th>
-                              <th className="text-left p-3 font-medium">Last Configured</th>
-                              <th className="text-left p-3 font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr className="border-b hover:bg-muted/25">
-                              <td className="p-3 font-medium">OLT-01</td>
-                              <td className="p-3">192.168.1.10</td>
-                              <td className="p-3">Huawei MA5800</td>
-                              <td className="p-3">Data Center Jakarta</td>
-                              <td className="p-3">
-                                <Badge className="bg-green-500">Configured</Badge>
-                              </td>
-                              <td className="p-3 text-muted-foreground">2 hours ago</td>
-                              <td className="p-3">
-                                <Button variant="ghost" size="sm">
-                                  <Settings className="h-4 w-4" />
-                                </Button>
-                              </td>
-                            </tr>
-                            <tr className="border-b hover:bg-muted/25">
-                              <td className="p-3 font-medium">OLT-02</td>
-                              <td className="p-3">192.168.1.11</td>
-                              <td className="p-3">ZTE C320</td>
-                              <td className="p-3">Data Center Surabaya</td>
-                              <td className="p-3">
-                                <Badge className="bg-green-500">Configured</Badge>
-                              </td>
-                              <td className="p-3 text-muted-foreground">1 day ago</td>
-                              <td className="p-3">
-                                <Button variant="ghost" size="sm">
-                                  <Settings className="h-4 w-4" />
-                                </Button>
-                              </td>
-                            </tr>
-                            <tr className="border-b hover:bg-muted/25">
-                              <td className="p-3 font-medium">OLT-03</td>
-                              <td className="p-3">192.168.1.12</td>
-                              <td className="p-3">Huawei MA5800</td>
-                              <td className="p-3">-</td>
-                              <td className="p-3">
-                                <Badge variant="secondary">Pending</Badge>
-                              </td>
-                              <td className="p-3 text-muted-foreground">Never</td>
-                              <td className="p-3">
-                                <Button variant="ghost" size="sm">
-                                  <Settings className="h-4 w-4" />
-                                </Button>
-                              </td>
-                            </tr>
-                            <tr className="border-b hover:bg-muted/25">
-                              <td className="p-3 font-medium">OLT-04</td>
-                              <td className="p-3">192.168.1.15</td>
-                              <td className="p-3">TMO 4EP-4SX-4G-OLT</td>
-                              <td className="p-3">Data Center Bandung</td>
-                              <td className="p-3">
-                                <Badge className="bg-green-500">Configured</Badge>
-                              </td>
-                              <td className="p-3 text-muted-foreground">3 hours ago</td>
-                              <td className="p-3">
-                                <Button variant="ghost" size="sm">
-                                  <Settings className="h-4 w-4" />
-                                </Button>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <p className="text-gray-600">+62 21 1234 5678</p>
+                <p className="text-gray-600">WhatsApp: +62 812 3456 7890</p>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="alerts">
-            <Card>
+            
+            <Card className="text-center">
               <CardHeader>
-                <CardTitle>System Alerts</CardTitle>
-                <CardDescription>
-                  Semua alert dan notifikasi sistem
-                </CardDescription>
+                <MapPin className="h-8 w-8 text-blue-600 mx-auto mb-4" />
+                <CardTitle>Alamat</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="border-l-4 border-red-500 pl-4 py-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-red-700">Critical: OLT-03 Down</p>
-                        <p className="text-sm text-muted-foreground">OLT tidak dapat dihubungi selama 5 menit</p>
-                      </div>
-                      <Badge variant="destructive">Critical</Badge>
-                    </div>
-                  </div>
-                  <div className="border-l-4 border-yellow-500 pl-4 py-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-yellow-700">Warning: ONU-045 Signal Weak</p>
-                        <p className="text-sm text-muted-foreground">Daya sinyal -28 dBm</p>
-                      </div>
-                      <Badge variant="secondary">Warning</Badge>
-                    </div>
-                  </div>
-                </div>
+                <p className="text-gray-600">Jl. Teknologi No. 123</p>
+                <p className="text-gray-600">Jakarta 12345, Indonesia</p>
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid md:grid-cols-4 gap-8">
+            <div>
+              <div className="flex items-center space-x-2 mb-4">
+                <Server className="h-8 w-8 text-blue-400" />
+                <span className="text-xl font-bold">MLJNET RADIUS</span>
+              </div>
+              <p className="text-gray-400">
+                Solusi RADIUS server terpercaya untuk kebutuhan autentikasi network Anda.
+              </p>
+            </div>
+            
+            <div>
+              <h3 className="font-semibold mb-4">Layanan</h3>
+              <ul className="space-y-2 text-gray-400">
+                <li>RADIUS Server</li>
+                <li>Network Monitoring</li>
+                <li>Custom Configuration</li>
+                <li>Technical Support</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="font-semibold mb-4">Perusahaan</h3>
+              <ul className="space-y-2 text-gray-400">
+                <li>Tentang Kami</li>
+                <li>Karir</li>
+                <li>Blog</li>
+                <li>Partner</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="font-semibold mb-4">Legal</h3>
+              <ul className="space-y-2 text-gray-400">
+                <li>Privacy Policy</li>
+                <li>Terms of Service</li>
+                <li>SLA</li>
+                <li>Compliance</li>
+              </ul>
+            </div>
+          </div>
+          
+          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+            <p>&copy; 2024 MLJNET RADIUS. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
+
+      {/* Order Dialog */}
+      <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Pesan Paket {selectedPlan}</DialogTitle>
+            <DialogDescription>
+              Isi form di bawah ini untuk memesan paket {selectedPlan}. Tim kami akan menghubungi Anda segera.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmitOrder}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">
+                  Nama Lengkap
+                </Label>
+                <Input
+                  id="name"
+                  value={contactForm.name}
+                  onChange={(e) => setContactForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="email" className="text-right">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={contactForm.email}
+                  onChange={(e) => setContactForm(prev => ({ ...prev, email: e.target.value }))}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="phone" className="text-right">
+                  Telepon
+                </Label>
+                <Input
+                  id="phone"
+                  value={contactForm.phone}
+                  onChange={(e) => setContactForm(prev => ({ ...prev, phone: e.target.value }))}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="company" className="text-right">
+                  Perusahaan
+                </Label>
+                <Input
+                  id="company"
+                  value={contactForm.company}
+                  onChange={(e) => setContactForm(prev => ({ ...prev, company: e.target.value }))}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="message" className="text-right">
+                  Pesan
+                </Label>
+                <Textarea
+                  id="message"
+                  value={contactForm.message}
+                  onChange={(e) => setContactForm(prev => ({ ...prev, message: e.target.value }))}
+                  className="col-span-3"
+                  placeholder="Ceritakan kebutuhan Anda..."
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOrderDialogOpen(false)}>
+                Batal
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Mengirim...' : 'Kirim Pesanan'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
