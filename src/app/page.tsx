@@ -5,6 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Activity, AlertTriangle, CheckCircle, Server, Wifi, WifiOff, Users, Cable, Settings, RefreshCw, Download, FileText, BarChart3 } from 'lucide-react'
 import { OLTTable } from '@/components/olt-table'
 import { ONUTable } from '@/components/onu-table'
@@ -32,6 +35,8 @@ export default function Dashboard() {
   })
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [tmoIpAddress, setTmoIpAddress] = useState('')
+  const [showTmoDialog, setShowTmoDialog] = useState(false)
   const { isConnected, lastMessage } = useSocket()
 
   useEffect(() => {
@@ -216,6 +221,12 @@ export default function Dashboard() {
   }
 
   const handleApplyTemplate = async (templateModel: string) => {
+    // Special handling for TMO template
+    if (templateModel === 'TMO-4EP-4SX-4G-OLT') {
+      setShowTmoDialog(true)
+      return
+    }
+
     setActionLoading(`template-${templateModel}`)
     try {
       toast({
@@ -246,6 +257,76 @@ export default function Dashboard() {
       toast({
         title: "Error",
         description: `Gagal menerapkan template ${templateModel}`,
+        variant: "destructive"
+      })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleApplyTmoTemplate = async () => {
+    if (!tmoIpAddress.trim()) {
+      toast({
+        title: "Error",
+        description: "IP address harus diisi untuk template TMO",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Validate IP address format
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+    if (!ipRegex.test(tmoIpAddress.trim())) {
+      toast({
+        title: "Error", 
+        description: "Format IP address tidak valid",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setActionLoading('template-TMO-4EP-4SX-4G-OLT')
+    try {
+      toast({
+        title: "Apply TMO Template",
+        description: `Menerapkan template TMO dengan IP ${tmoIpAddress}...`,
+      })
+      
+      // Call TMO template API with custom IP
+      const response = await fetch('/api/olts/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          model: 'TMO-4EP-4SX-4G-OLT',
+          customIp: tmoIpAddress.trim(),
+          snmpConfig: {
+            community: 'public',
+            port: 161,
+            version: '2c'
+          }
+        })
+      })
+      
+      if (response.ok) {
+        const template = await response.json()
+        
+        toast({
+          title: "TMO Template Diterapkan",
+          description: `Template TMO berhasil diterapkan dengan IP ${tmoIpAddress}`,
+        })
+        
+        // Reset form
+        setTmoIpAddress('')
+        setShowTmoDialog(false)
+      } else {
+        throw new Error('Failed to apply TMO template')
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Gagal menerapkan template TMO dengan IP ${tmoIpAddress}`,
         variant: "destructive"
       })
     } finally {
@@ -675,15 +756,98 @@ export default function Dashboard() {
                           <FileText className="h-4 w-4 mr-2" />
                           {actionLoading === 'template-Nokia-7360' ? 'Menerapkan...' : 'Nokia Template'}
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={() => handleApplyTemplate('TMO-4EP-4SX-4G-OLT')}
-                          disabled={actionLoading === 'template-TMO-4EP-4SX-4G-OLT'}
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          {actionLoading === 'template-TMO-4EP-4SX-4G-OLT' ? 'Menerapkan...' : 'TMO 4EP-4SX-4G Template'}
-                        </Button>
+                        <Dialog open={showTmoDialog} onOpenChange={setShowTmoDialog}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              className="w-full justify-start"
+                              disabled={actionLoading === 'template-TMO-4EP-4SX-4G-OLT'}
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              TMO 4EP-4SX-4G Template
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="sm:max-w-[425px]">
+                            <DialogHeader>
+                              <DialogTitle className="flex items-center space-x-2">
+                                <FileText className="h-5 w-5" />
+                                <span>Konfigurasi TMO Template</span>
+                              </DialogTitle>
+                              <DialogDescription>
+                                Masukkan IP address untuk konfigurasi SNMP get pada perangkat TMO 4EP-4SX-4G-OLT
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="tmo-ip" className="text-right">
+                                  IP Address
+                                </Label>
+                                <Input
+                                  id="tmo-ip"
+                                  placeholder="192.168.1.100"
+                                  value={tmoIpAddress}
+                                  onChange={(e) => setTmoIpAddress(e.target.value)}
+                                  className="col-span-3"
+                                />
+                              </div>
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="snmp-community" className="text-right">
+                                  SNMP Community
+                                </Label>
+                                <Input
+                                  id="snmp-community"
+                                  value="public"
+                                  disabled
+                                  className="col-span-3 bg-muted"
+                                />
+                              </div>
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="snmp-port" className="text-right">
+                                  SNMP Port
+                                </Label>
+                                <Input
+                                  id="snmp-port"
+                                  value="161"
+                                  disabled
+                                  className="col-span-3 bg-muted"
+                                />
+                              </div>
+                              <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="snmp-version" className="text-right">
+                                  SNMP Version
+                                </Label>
+                                <Input
+                                  id="snmp-version"
+                                  value="2c"
+                                  disabled
+                                  className="col-span-3 bg-muted"
+                                />
+                              </div>
+                            </div>
+                            <div className="bg-blue-50 p-3 rounded-md">
+                              <p className="text-sm text-blue-800">
+                                <strong>Catatan:</strong> Template TMO akan mengkonfigurasi SNMP get untuk monitoring status perangkat, 
+                                utilization port, dan performa ONU secara otomatis.
+                              </p>
+                            </div>
+                            <DialogFooter>
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={() => setShowTmoDialog(false)}
+                              >
+                                Batal
+                              </Button>
+                              <Button 
+                                type="button" 
+                                onClick={handleApplyTmoTemplate}
+                                disabled={actionLoading === 'template-TMO-4EP-4SX-4G-OLT'}
+                              >
+                                {actionLoading === 'template-TMO-4EP-4SX-4G-OLT' ? 'Menerapkan...' : 'Terapkan Template'}
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                       </CardContent>
                     </Card>
 
