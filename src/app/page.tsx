@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession, signOut } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Activity, AlertTriangle, CheckCircle, Server, Wifi, WifiOff, Users, Cable, Settings, RefreshCw, Download, FileText, BarChart3 } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Activity, AlertTriangle, CheckCircle, Server, Wifi, WifiOff, Users, Cable, Settings, RefreshCw, Download, FileText, BarChart3, LogOut, User } from 'lucide-react'
 import { OLTTable } from '@/components/olt-table'
 import { ONUTable } from '@/components/onu-table'
 import { useSocket } from '@/hooks/useSocket'
@@ -25,6 +27,7 @@ interface DashboardStats {
 }
 
 export default function Dashboard() {
+  const { data: session, status } = useSession()
   const [stats, setStats] = useState<DashboardStats>({
     totalOLT: 0,
     onlineOLT: 0,
@@ -38,6 +41,35 @@ export default function Dashboard() {
   const [tmoIpAddress, setTmoIpAddress] = useState('')
   const [showTmoDialog, setShowTmoDialog] = useState(false)
   const { isConnected, lastMessage } = useSocket()
+
+  // Handle authentication
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  if (status === 'unauthenticated') {
+    return null // Will be redirected by middleware
+  }
+
+  const handleLogout = async () => {
+    try {
+      await signOut({ callbackUrl: '/login' })
+      toast({
+        title: "Logout Berhasil",
+        description: "Anda telah keluar dari dashboard",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal melakukan logout",
+        variant: "destructive"
+      })
+    }
+  }
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -63,12 +95,15 @@ export default function Dashboard() {
       }
     }
 
-    fetchStats()
-  }, [])
+    // Only fetch stats if authenticated
+    if (status === 'authenticated') {
+      fetchStats()
+    }
+  }, [status])
 
   // Handle real-time updates
   useEffect(() => {
-    if (lastMessage) {
+    if (lastMessage && status === 'authenticated') {
       switch (lastMessage.type) {
         case 'device-status-changed':
         case 'device-metrics-updated':
@@ -88,7 +123,20 @@ export default function Dashboard() {
           break
       }
     }
-  }, [lastMessage])
+  }, [lastMessage, status])
+
+  // Handle authentication
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  if (status === 'unauthenticated') {
+    return null // Will be redirected by middleware
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -484,9 +532,20 @@ export default function Dashboard() {
               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
               <span>{isConnected ? 'Live' : 'Offline'}</span>
             </Badge>
+            
+            {/* User Info */}
+            <div className="flex items-center space-x-2">
+              <Badge variant="secondary" className="flex items-center space-x-1">
+                <User className="h-3 w-3" />
+                <span>{session?.user?.username}</span>
+                <span className="text-xs">({session?.user?.role})</span>
+              </Badge>
+            </div>
+            
             <ThemeToggle />
-            <Button variant="outline" size="sm">
-              Refresh
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
             </Button>
           </div>
         </div>
