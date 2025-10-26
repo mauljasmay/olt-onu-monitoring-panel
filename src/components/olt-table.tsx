@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Search, Server, Wifi, WifiOff, AlertTriangle, Settings, Eye, Plus } from 'lucide-react'
+import { Search, Server, Wifi, WifiOff, AlertTriangle, Settings, Eye, Plus, Trash2 } from 'lucide-react'
 import { OLTSettings } from './olt-settings'
 import { toast } from '@/hooks/use-toast'
 
@@ -37,6 +37,9 @@ export function OLTTable() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [addLoading, setAddLoading] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [oltToDelete, setOltToDelete] = useState<OLTDevice | null>(null)
   
   // Form state for new OLT
   const [newOlt, setNewOlt] = useState({
@@ -181,6 +184,66 @@ export function OLTTable() {
       location: ''
     })
     setAddDialogOpen(false)
+  }
+
+  const handleDeleteOLT = (device: OLTDevice) => {
+    setOltToDelete(device)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDeleteOLT = async () => {
+    if (!oltToDelete) return
+
+    setDeleteLoading(true)
+    try {
+      toast({
+        title: "Menghapus OLT",
+        description: `Menghapus OLT ${oltToDelete.name}...`,
+      })
+
+      const response = await fetch(`/api/olts/${oltToDelete.id}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        toast({
+          title: "OLT Berhasil Dihapus",
+          description: `OLT ${oltToDelete.name} telah dihapus beserta semua data terkait`,
+        })
+
+        // Close dialog and reset state
+        setDeleteDialogOpen(false)
+        setOltToDelete(null)
+
+        // Refresh devices list
+        fetchDevices()
+        
+        // Also refresh dashboard stats
+        fetch('/api/dashboard/stats')
+          .then(res => res.json())
+          .then(data => {
+            console.log('Dashboard stats refreshed:', data)
+          })
+          .catch(console.error)
+      } else {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete OLT')
+      }
+    } catch (error) {
+      console.error('Failed to delete OLT:', error)
+      toast({
+        title: "Error",
+        description: `Gagal menghapus OLT ${oltToDelete?.name}`,
+        variant: "destructive"
+      })
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  const cancelDelete = () => {
+    setDeleteDialogOpen(false)
+    setOltToDelete(null)
   }
 
   const fetchDevices = async () => {
@@ -582,6 +645,14 @@ export function OLTTable() {
                       <Button variant="ghost" size="sm" onClick={() => handleOpenSettings(device)}>
                         <Settings className="h-4 w-4" />
                       </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleDeleteOLT(device)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -607,6 +678,54 @@ export function OLTTable() {
             onSave={handleSaveSettings}
           />
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2 text-red-600">
+                <Trash2 className="h-5 w-5" />
+                <span>Hapus OLT</span>
+              </DialogTitle>
+              <DialogDescription>
+                Apakah Anda yakin ingin menghapus OLT {oltToDelete?.name}? 
+                Tindakan ini akan menghapus semua data terkait termasuk ONU, alerts, dan monitoring logs.
+              </DialogDescription>
+            </DialogHeader>
+            
+            {oltToDelete && (
+              <div className="bg-red-50 p-4 rounded-md">
+                <h4 className="font-medium text-red-800 mb-2">Detail OLT yang akan dihapus:</h4>
+                <div className="space-y-1 text-sm text-red-700">
+                  <p><strong>Nama:</strong> {oltToDelete.name}</p>
+                  <p><strong>IP Address:</strong> {oltToDelete.ip}</p>
+                  <p><strong>Model:</strong> {oltToDelete.model}</p>
+                  <p><strong>Status:</strong> {oltToDelete.status}</p>
+                  <p><strong>Jumlah ONU:</strong> {oltToDelete.onuCount}</p>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={cancelDelete}
+                disabled={deleteLoading}
+              >
+                Batal
+              </Button>
+              <Button 
+                type="button" 
+                variant="destructive"
+                onClick={confirmDeleteOLT}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? 'Menghapus...' : 'Hapus OLT'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   )
